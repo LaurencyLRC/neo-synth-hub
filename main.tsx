@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import NeonSynthPad from "./NeonSynthPad.tsx";
+import NeonSynthPad from "./consonanceanalyzer.ts";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

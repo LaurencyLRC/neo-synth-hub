@@ -58,4 +58,14 @@ describe("describeInterval", () => {
     expect(Math.round(fifth.justCents)).toBe(702);
     expect(describeInterval(0, 19).ratio).toBe("3:1");
   });
+
+  it("provides valid ratios for Lissajous figures across intervals", () => {
+    expect(describeInterval(0, 0).ratio).toBe("1:1");
+    expect(describeInterval(0, 12).ratio).toBe("2:1");
+    expect(describeInterval(0, 7).ratio).toBe("3:2");
+    expect(describeInterval(0, 5).ratio).toBe("4:3");
+    expect(describeInterval(0, 4).ratio).toBe("5:4");
+    expect(describeInterval(0, 3).ratio).toBe("6:5");
+    expect(describeInterval(0, 6).ratio).toBe("45:32");
+  });
 });

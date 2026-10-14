@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Info, Settings2, Eye, EyeOff, Circle, Triangle, Diamond, LayoutGrid, Activity, Layers } from "lucide-react";
-import { consonanceBucket, noteVsSetBucket, detectChord, describeInterval, BUCKET_TEXT, bucketOf, setTension } from "./theory";
+import { consonanceBucket, noteVsSetBucket, detectChord, describeInterval, BUCKET_TEXT, bucketOf, setTension, noteName, Bucket } from "./theory";
 
 type Snap = { seq: Set<string>; chord: Set<string> };
 const WAVES: OscillatorType[] = ["sine", "triangle", "sawtooth", "square"];
@@ -51,6 +51,344 @@ const GLOW_CONFIG = {
 const getConsonanceType = consonanceBucket;
 const getHarmonicTypeForSet = (t: number, held: number[]) => (held.length ? noteVsSetBucket(t, held) : "neutral");
 
+export type IntervalInfo = {
+  type: "interval" | "chord";
+  name: string;
+  percentage: string;
+  consonance: string;
+  diff: number;
+  pitches: number[];
+  ratio?: string;
+  bucket: Bucket;
+};
+
+export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo }> = ({ interval }) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const animIdRef = useRef<number | null>(null);
+  const phaseRef = useRef<number>(0);
+  const trailRef = useRef<{ x: number; y: number }[]>([]);
+  const lastKeyRef = useRef<string>("");
+
+  useEffect(() => {
+    const key = `${interval.type}-${interval.pitches.join(",")}`;
+    if (key !== lastKeyRef.current) {
+      lastKeyRef.current = key;
+      trailRef.current = [];
+    }
+  }, [interval]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let running = true;
+    let lastTime = performance.now();
+
+    const render = (time: number) => {
+      if (!running) return;
+      const dt = Math.min((time - lastTime) / 1000, 0.08);
+      lastTime = time;
+
+      const rect = canvas.getBoundingClientRect();
+      const width = Math.floor(rect.width) || 224;
+      const height = Math.floor(rect.height) || 135;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+      const targetW = Math.floor(width * dpr);
+      const targetH = Math.floor(height * dpr);
+      if (canvas.width !== targetW || canvas.height !== targetH) {
+        canvas.width = targetW;
+        canvas.height = targetH;
+      }
+
+      ctx.save();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      // 1. Dark CRT Oscilloscope background
+      ctx.fillStyle = "#060913";
+      ctx.fillRect(0, 0, width, height);
+
+      // 2. CRT Grid lines
+      ctx.strokeStyle = "#1e293b";
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.25;
+      const gridSize = 20;
+      ctx.beginPath();
+      for (let x = gridSize; x < width; x += gridSize) {
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+      }
+      for (let y = gridSize; y < height; y += gridSize) {
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+      }
+      ctx.stroke();
+
+      const cx = width / 2;
+      const cy = height / 2;
+
+      // Center crosshair with ticks
+      ctx.strokeStyle = "#334155";
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.moveTo(cx - 12, cy); ctx.lineTo(cx + 12, cy);
+      ctx.moveTo(cx, cy - 12); ctx.lineTo(cx, cy + 12);
+      ctx.stroke();
+
+      // Corner brackets (oscilloscope reticle accents)
+      const bLen = 6;
+      ctx.strokeStyle = "#475569";
+      ctx.globalAlpha = 0.6;
+      ctx.beginPath();
+      // top-left
+      ctx.moveTo(4, 4 + bLen); ctx.lineTo(4, 4); ctx.lineTo(4 + bLen, 4);
+      // top-right
+      ctx.moveTo(width - 4 - bLen, 4); ctx.lineTo(width - 4, 4); ctx.lineTo(width - 4, 4 + bLen);
+      // bottom-left
+      ctx.moveTo(4, height - 4 - bLen); ctx.lineTo(4, height - 4); ctx.lineTo(4 + bLen, height - 4);
+      // bottom-right
+      ctx.moveTo(width - 4 - bLen, height - 4); ctx.lineTo(width - 4, height - 4); ctx.lineTo(width - 4, height - 4 - bLen);
+      ctx.stroke();
+
+      ctx.globalAlpha = 1;
+
+      const mainColor = COLORS[interval.bucket] || "#22d3ee";
+
+      if (interval.type === "interval") {
+        // --- LISSAJOUS PREVIEW (2 NOTES) ---
+        const [p1, p2] = interval.pitches;
+        const diff = Math.abs(p2 - p1);
+
+        let a = 1, b = 1;
+        if (interval.ratio) {
+          const parts = interval.ratio.split(":").map(Number);
+          if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1]) && parts[0] > 0 && parts[1] > 0) {
+            a = parts[0];
+            b = parts[1];
+          }
+        }
+
+        // Phase advance speed (proportional to consonance)
+        const phaseSpeed = interval.bucket === "perfect" ? 0.9 : interval.bucket === "consonant" ? 1.2 : 1.6;
+        phaseRef.current = (phaseRef.current + phaseSpeed * dt) % (Math.PI * 4);
+        const phi = phaseRef.current;
+
+        const rx = (width / 2) * 0.72;
+        const ry = (height / 2) * 0.72;
+
+        const usePureRatio = a <= 16 && b <= 16;
+        const maxTheta = usePureRatio ? Math.PI * 2 : Math.PI * 8;
+        const steps = usePureRatio ? 400 : 800;
+        const fy = usePureRatio ? b : Math.pow(2, diff / 12);
+        const fx = usePureRatio ? a : 1;
+
+        // Trace Lissajous curve
+        ctx.beginPath();
+        for (let i = 0; i <= steps; i++) {
+          const theta = (i / steps) * maxTheta;
+          const x = cx + Math.cos(fx * theta + phi) * rx;
+          const y = cy - Math.sin(fy * theta) * ry;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+
+        // Bloom stroke (glow)
+        ctx.shadowColor = mainColor;
+        ctx.shadowBlur = 10;
+        ctx.strokeStyle = mainColor;
+        ctx.lineWidth = 2.2;
+        ctx.stroke();
+
+        // Inner bright line
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 0.8;
+        ctx.globalAlpha = 0.6;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+
+        // Instantaneous phosphor beam dot
+        const beamX = cx + Math.cos(phi) * rx;
+        const beamY = cy - Math.sin(0) * ry;
+        ctx.shadowColor = "#ffffff";
+        ctx.shadowBlur = 12;
+        ctx.fillStyle = "#ffffff";
+        ctx.beginPath();
+        ctx.arc(beamX, beamY, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Canvas badges
+        ctx.shadowBlur = 0;
+        ctx.font = "9px monospace";
+        ctx.fillStyle = "#67e8f9";
+        ctx.fillText(`LISSAJOUS [${interval.ratio || `${a}:${b}`}]`, 8, 14);
+
+        ctx.fillStyle = "#94a3b8";
+        ctx.textAlign = "right";
+        ctx.fillText(`X:${noteName(p1)} · Y:${noteName(p2)}`, width - 8, height - 8);
+        ctx.textAlign = "left";
+
+      } else {
+        // --- VECTOR SUPERPOSITION PREVIEW (3+ NOTES) ---
+        const pitches = [...interval.pitches].sort((x, y) => x - y);
+        const K = pitches.length;
+        const bass = pitches[0];
+
+        // Angular velocities based on pitch offsets from bass
+        const baseSpeed = 1.4; // rad / sec
+        phaseRef.current = (phaseRef.current + baseSpeed * dt) % (Math.PI * 100);
+        const t = phaseRef.current;
+
+        const maxR = Math.min(width, height) * 0.42;
+        const armLength = maxR / Math.pow(K, 0.62);
+
+        // Compute tip-to-tail joint positions
+        const joints: { x: number; y: number; pitch: number }[] = [{ x: cx, y: cy, pitch: bass }];
+        let currX = cx;
+        let currY = cy;
+
+        for (let i = 0; i < K; i++) {
+          const semitonesFromBass = pitches[i] - bass;
+          const omega = Math.pow(2, semitonesFromBass / 12);
+          const angle = omega * t;
+          currX += armLength * Math.cos(angle);
+          currY -= armLength * Math.sin(angle);
+          joints.push({ x: currX, y: currY, pitch: pitches[i] });
+        }
+
+        const tip = joints[joints.length - 1];
+
+        // Record trail of the resultant tip
+        const trail = trailRef.current;
+        trail.push({ x: tip.x, y: tip.y });
+        if (trail.length > 150) trail.shift();
+
+        // 1. Polar reference rings
+        ctx.strokeStyle = "#1e293b";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 4]);
+        ctx.beginPath();
+        ctx.arc(cx, cy, maxR * 0.5, 0, Math.PI * 2);
+        ctx.arc(cx, cy, maxR, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 2. Epicycle trajectory trail (fading glowing rosette)
+        if (trail.length > 2) {
+          const numSegs = 4;
+          const segSize = Math.ceil(trail.length / numSegs);
+          for (let s = 0; s < numSegs; s++) {
+            const startIdx = s * segSize;
+            const endIdx = Math.min(trail.length, (s + 1) * segSize);
+            if (startIdx >= trail.length || endIdx <= startIdx) continue;
+
+            const progress = (s + 1) / numSegs;
+            ctx.beginPath();
+            ctx.moveTo(trail[Math.max(0, startIdx - 1)].x, trail[Math.max(0, startIdx - 1)].y);
+            for (let i = startIdx; i < endIdx; i++) {
+              ctx.lineTo(trail[i].x, trail[i].y);
+            }
+            ctx.strokeStyle = mainColor;
+            ctx.globalAlpha = 0.15 + 0.7 * progress;
+            ctx.lineWidth = 1.0 + 0.8 * progress;
+            if (s === numSegs - 1) {
+              ctx.shadowColor = mainColor;
+              ctx.shadowBlur = 8;
+            } else {
+              ctx.shadowBlur = 0;
+            }
+            ctx.stroke();
+          }
+          ctx.globalAlpha = 1;
+          ctx.shadowBlur = 0;
+        }
+
+        // 3. Resultant vector ray from origin to tip
+        ctx.strokeStyle = mainColor;
+        ctx.globalAlpha = 0.35;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(tip.x, tip.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+
+        // 4. Phasor chain arms
+        ctx.shadowBlur = 0;
+        ctx.lineWidth = 1.8;
+        ctx.strokeStyle = "#f8fafc";
+        ctx.beginPath();
+        ctx.moveTo(joints[0].x, joints[0].y);
+        for (let i = 1; i < joints.length; i++) {
+          ctx.lineTo(joints[i].x, joints[i].y);
+        }
+        ctx.stroke();
+
+        // 5. Joint nodes and note labels
+        ctx.font = "8px monospace";
+        for (let i = 0; i < joints.length; i++) {
+          const j = joints[i];
+          const isTip = i === joints.length - 1;
+          const isOrigin = i === 0;
+
+          if (isTip) {
+            // Glowing tip beacon
+            ctx.shadowColor = mainColor;
+            ctx.shadowBlur = 12;
+            ctx.fillStyle = "#ffffff";
+            ctx.beginPath();
+            ctx.arc(j.x, j.y, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = mainColor;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(j.x, j.y, 6, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+          } else {
+            ctx.fillStyle = isOrigin ? "#64748b" : mainColor;
+            ctx.beginPath();
+            ctx.arc(j.x, j.y, 2, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          if (i > 0) {
+            ctx.fillStyle = "#cbd5e1";
+            ctx.fillText(noteName(j.pitch), j.x + 4, j.y - 3);
+          }
+        }
+
+        // Mode badge & pitch list
+        ctx.font = "9px monospace";
+        ctx.fillStyle = "#38bdf8";
+        ctx.fillText(`SUPERPOSITION [${K} VECTORS]`, 8, 14);
+
+        ctx.fillStyle = "#94a3b8";
+        ctx.textAlign = "right";
+        ctx.fillText(pitches.map(p => noteName(p)).join(" "), width - 8, height - 8);
+        ctx.textAlign = "left";
+      }
+
+      ctx.restore();
+      animIdRef.current = requestAnimationFrame(render);
+    };
+
+    animIdRef.current = requestAnimationFrame(render);
+
+    return () => {
+      running = false;
+      if (animIdRef.current) cancelAnimationFrame(animIdRef.current);
+    };
+  }, [interval]);
+
+  return <canvas ref={canvasRef} className="w-full h-full block" />;
+};
+
 export default function NeonSynthPad() {
   const [waveType, setWaveType] = useState<OscillatorType>("sawtooth");
   const [numNotes, setNumNotes] = useState(24);
@@ -59,6 +397,10 @@ export default function NeonSynthPad() {
   const [activeNotes, setActiveNotes] = useState<Set<number>>(new Set());
   const [disabledNotes, setDisabledNotes] = useState<Set<number>>(new Set());
   const [lastNotes, setLastNotes] = useState<number[]>([]);
+  const [lastSoundedGroup, setLastSoundedGroup] = useState<{
+    type: "interval" | "chord";
+    pitches: number[];
+  } | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [pivotNote, setPivotNote] = useState<number | null>(null);
   const [octave, setOctave] = useState(4);
@@ -756,31 +1098,65 @@ export default function NeonSynthPad() {
     });
   };
 
-  const getIntervalInfo = () => {
+  useEffect(() => {
     const activeIndices = Array.from(activeNotes);
-    const sequencedPitches = isPlaying ? stepMetadata.pitchesAtStep[currentStep] : [];
-    if (activeIndices.length >= 3) {
-      const chord = getChordName(activeIndices);
-      const consonance = BUCKET_TEXT[bucketOf(setTension(activeIndices).tension)];
-      return { name: chord, percentage: "Chord Mode", consonance, diff: activeIndices.length };
+    const sequencedPitches = isPlaying ? (stepMetadata.pitchesAtStep[currentStep] || []) : [];
+    const source = activeIndices.length >= 2 ? activeIndices : (sequencedPitches.length >= 2 ? sequencedPitches : null);
+    if (source && source.length >= 2) {
+      const pitches = source.map(idx => octave * 12 + idx);
+      setLastSoundedGroup({
+        type: source.length >= 3 ? "chord" : "interval",
+        pitches,
+      });
     }
-    if (sequencedPitches.length >= 3) {
-      const chord = getChordName(sequencedPitches);
-      const consonance = BUCKET_TEXT[bucketOf(setTension(sequencedPitches).tension)];
-      return { name: chord, percentage: "Chord Mode", consonance, diff: sequencedPitches.length };
+  }, [activeNotes, isPlaying, currentStep, stepMetadata, octave]);
+
+  const getIntervalInfo = (): IntervalInfo | null => {
+    const activeIndices = Array.from(activeNotes);
+    const sequencedPitches = isPlaying ? (stepMetadata.pitchesAtStep[currentStep] || []) : [];
+
+    let currentPitches: number[] | null = null;
+    if (activeIndices.length >= 2) {
+      currentPitches = activeIndices.map(i => octave * 12 + i);
+    } else if (sequencedPitches.length >= 2) {
+      currentPitches = sequencedPitches.map(i => octave * 12 + i);
+    } else if (lastSoundedGroup && lastSoundedGroup.pitches.length >= 2) {
+      currentPitches = lastSoundedGroup.pitches;
+    } else if (lastNotes.length >= 2) {
+      currentPitches = [lastNotes[0], lastNotes[1]];
     }
 
-    let p1, p2;
-    if (activeIndices.length === 2) {
-      [p1, p2] = activeIndices;
-    } else if (lastNotes.length >= 2) {
-      [p1, p2] = lastNotes;
-    } else {
+    if (!currentPitches || currentPitches.length < 2) {
       return null;
     }
 
+    if (currentPitches.length >= 3) {
+      const chord = getChordName(currentPitches);
+      const tension = setTension(currentPitches).tension;
+      const bucket = bucketOf(tension);
+      return {
+        type: "chord",
+        name: chord,
+        percentage: "Chord Mode",
+        consonance: BUCKET_TEXT[bucket],
+        diff: currentPitches.length,
+        pitches: currentPitches,
+        bucket,
+      };
+    }
+
+    const [p1, p2] = currentPitches;
     const d = describeInterval(p1, p2);
-    return { name: d.name, percentage: `${d.ratio} · ${Math.round(d.cents)}¢`, consonance: BUCKET_TEXT[d.bucket], diff: d.semitones };
+    return {
+      type: "interval",
+      name: d.name,
+      percentage: `${d.ratio} · ${Math.round(d.cents)}¢`,
+      consonance: BUCKET_TEXT[d.bucket],
+      diff: d.semitones,
+      pitches: [p1, p2],
+      ratio: d.ratio,
+      bucket: d.bucket,
+    };
   };
 
   const interval = getIntervalInfo();
@@ -836,7 +1212,7 @@ export default function NeonSynthPad() {
 
       {/* Interval Info Overlay */}
       <div className="absolute top-8 left-8 flex flex-col gap-2">
-        <div className="p-4 bg-white/5 backdrop-blur-md rounded-lg border border-white/10 w-64">
+        <div className="p-4 bg-white/5 backdrop-blur-md rounded-lg border border-white/10 w-64 shadow-2xl">
           <div className="flex items-center gap-2 mb-2 text-zinc-400">
             <Info size={14} />
             <span className="text-[10px] uppercase tracking-widest">Last Interval</span>
@@ -853,6 +1229,11 @@ export default function NeonSynthPad() {
                 interval.consonance === "slightly consonant" ? "text-amber-400" : "text-rose-500"
               }`}>
                 {interval.consonance}
+              </div>
+
+              {/* Harmonic Visualizer: Lissajous (2 notes) or Vector Superposition (3+ notes) */}
+              <div className="mt-3 relative rounded border border-white/10 bg-black/60 overflow-hidden shadow-inner h-[135px]">
+                <HarmonicVisualizer interval={interval} />
               </div>
             </div>
           ) : (

@@ -8,6 +8,13 @@ export default defineConfig({
     loader: "tsx",
     include: /.*\.tsx?$/
   },
+  optimizeDeps: {
+    esbuildOptions: {
+      loader: {
+        ".ts": "tsx"
+      }
+    }
+  },
   server: {
     port: 3001,
     host: true,

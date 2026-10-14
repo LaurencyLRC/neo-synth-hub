@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   Settings2,
   Eye,
@@ -126,17 +126,17 @@ const getDeltaFractionLabel = (semitones: number) => {
   const redNum = netNum / g;
   const redDen = den / g;
   if (redDen === 1) return `+${redNum}`;
-  if (redNum === 1 && redDen === 2) return "+½";
-  if (redNum === 1 && redDen === 4) return "+¼";
-  if (redNum === 3 && redDen === 4) return "+¾";
-  if (redNum === 1 && redDen === 3) return "+⅓";
-  if (redNum === 2 && redDen === 3) return "+⅔";
-  if (redNum === 1 && redDen === 5) return "+⅕";
-  if (redNum === 2 && redDen === 5) return "+⅖";
-  if (redNum === 3 && redDen === 5) return "+⅗";
-  if (redNum === 4 && redDen === 5) return "+⅘";
-  if (redNum === 1 && redDen === 8) return "+⅛";
-  if (redNum === 7 && redDen === 8) return "+⅞";
+  if (redNum === 1 && redDen === 2) return "+1/2";
+  if (redNum === 1 && redDen === 4) return "+1/4";
+  if (redNum === 3 && redDen === 4) return "+3/4";
+  if (redNum === 1 && redDen === 3) return "+1/3";
+  if (redNum === 2 && redDen === 3) return "+2/3";
+  if (redNum === 1 && redDen === 5) return "+1/5";
+  if (redNum === 2 && redDen === 5) return "+2/5";
+  if (redNum === 3 && redDen === 5) return "+3/5";
+  if (redNum === 4 && redDen === 5) return "+4/5";
+  if (redNum === 1 && redDen === 8) return "+1/8";
+  if (redNum === 7 && redDen === 8) return "+7/8";
   return `+${(netNum / den).toFixed(2)}`;
 };
 
@@ -338,8 +338,8 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         phaseRef.current = (phaseRef.current + phaseSpeed * dt) % (Math.PI * 4);
         const phi = phaseRef.current;
 
-        const rx = Math.min(width, height * 1.3) * 0.34;
-        const ry = (height / 2) * 0.68;
+        const rx = Math.min(width * 0.42, (height / 2) * 1.35);
+        const ry = (height / 2) * 0.76;
 
         const usePureRatio = a <= 16 && b <= 16;
         const maxTheta = usePureRatio ? Math.PI * 2 : Math.PI * 8;
@@ -393,7 +393,7 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         const N = pitches.length;
         const bass = pitches[0];
 
-        const R = Math.min(width, height) * 0.34;
+        const R = Math.min(width * 0.38, (height / 2) * 0.82);
         const armLength = R / N;
         const deltaFreqs = pitches.map(p => getDeltaFreq(p - bass));
 
@@ -417,9 +417,9 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         ctx.stroke();
         ctx.setLineDash([]);
 
-        ctx.font = "7px 'JetBrains Mono', monospace";
-        ctx.fillStyle = "#475569";
-        ctx.fillText("|Z|=1", cx + R - 14, cy - 4);
+        ctx.font = "8px 'JetBrains Mono', monospace";
+        ctx.fillStyle = "#64748b";
+        ctx.fillText("|Z|=1", cx + R + 4, cy - 3);
         ctx.fillText("0", cx - 8, cy - 3);
 
         // 2. Closed Resonant Orbit Manifold
@@ -890,17 +890,39 @@ export default function NeonSynthPad() {
   const rowHeight =
     renderedNoteIndices.length <= 18 ? 504 / renderedNoteIndices.length : 504 / 18;
 
+  const [containerWidth, setContainerWidth] = useState<number>(0);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const updateWidth = () => {
+      setContainerWidth(el.clientWidth);
+    };
+    updateWidth();
+    const ro = new ResizeObserver(updateWidth);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [viewMode]);
+
+  const effectiveStepWidth = useMemo(() => {
+    if (containerWidth > 120 && numSteps > 0) {
+      const autoW = Math.floor((containerWidth - 54) / numSteps);
+      if (autoW > stepWidth) return autoW;
+    }
+    return stepWidth;
+  }, [containerWidth, numSteps, stepWidth]);
+
   const updateViewport = useCallback(() => {
     if (!scrollRef.current) return;
     const { scrollLeft, clientWidth } = scrollRef.current;
-    const start = Math.max(0, Math.floor((scrollLeft - 52) / stepWidth) - 2);
-    const end = Math.min(numSteps, Math.ceil((clientWidth + scrollLeft - 52) / stepWidth) + 2);
+    const start = Math.max(0, Math.floor((scrollLeft - 52) / effectiveStepWidth) - 2);
+    const end = Math.min(numSteps, Math.ceil((clientWidth + scrollLeft - 52) / effectiveStepWidth) + 2);
     setViewportSteps({ start, end });
-  }, [stepWidth, numSteps]);
+  }, [effectiveStepWidth, numSteps]);
 
   useEffect(() => {
     updateViewport();
-  }, [viewMode, numSteps, stepWidth, updateViewport]);
+  }, [viewMode, numSteps, effectiveStepWidth, updateViewport]);
 
   useEffect(() => {
     if (viewMode === "roll") {
@@ -1544,7 +1566,7 @@ export default function NeonSynthPad() {
     const d = describeInterval(p1, p2);
     return {
       type: "interval",
-      name: d.name,
+      name: d.name.replace(/\b[a-z]/g, c => c.toUpperCase()),
       percentage: `${d.ratio} · ${Math.round(d.cents)}¢`,
       consonance: BUCKET_TEXT[d.bucket],
       diff: d.semitones,
@@ -1723,7 +1745,7 @@ export default function NeonSynthPad() {
           </div>
 
           {/* Dedicated Sunken CRT Scope Bezel */}
-          <div className="flex-1 hw-well rounded-lg overflow-hidden relative min-h-[116px]">
+          <div className="flex-1 hw-well rounded-lg overflow-hidden relative min-h-[128px]">
             <HarmonicVisualizer interval={interval} />
           </div>
         </div>
@@ -1732,7 +1754,7 @@ export default function NeonSynthPad() {
         <div className="lg:col-span-7 hw-panel rounded-xl p-3 flex flex-col justify-between gap-2.5">
           {/* Upper Control Strip: Transport, Mode, Pitch Register, Waveform */}
           <div className="flex flex-wrap items-center justify-between gap-2">
-            {/* Transport & View Mode */}
+            {/* Transport, Master Tempo & View Mode */}
             <div className="flex items-center gap-2">
               <div className="hw-well rounded-lg p-0.5 flex items-center h-8">
                 <button
@@ -1745,6 +1767,36 @@ export default function NeonSynthPad() {
                 >
                   {isPlaying ? <Square size={11} fill="currentColor" /> : <Play size={11} fill="currentColor" />}
                   {isPlaying ? "STOP" : "PLAY"}
+                </button>
+              </div>
+
+              {/* Master Tempo / BPM Widget */}
+              <div
+                onMouseDown={startNumericDrag(bpm, setBpm, 40, 240, 5)}
+                onWheel={e => {
+                  if (e.deltaY < 0) setBpm(prev => Math.min(240, prev + 1));
+                  else setBpm(prev => Math.max(40, prev - 1));
+                }}
+                className="hw-well rounded-lg p-0.5 flex items-center h-8 cursor-ns-resize"
+                title="Drag vertically or scroll to adjust BPM"
+              >
+                <span className="px-2 text-[9px] uppercase tracking-wider text-slate-500 font-semibold">
+                  BPM
+                </span>
+                <button
+                  onClick={() => setBpm(prev => Math.max(40, prev - 1))}
+                  className="w-5 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300"
+                >
+                  -
+                </button>
+                <div className="px-1.5 text-xs font-semibold text-emerald-400 border-x border-slate-800 min-w-[2.2rem] text-center">
+                  {bpm}
+                </div>
+                <button
+                  onClick={() => setBpm(prev => Math.min(240, prev + 1))}
+                  className="w-5 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300"
+                >
+                  +
                 </button>
               </div>
 
@@ -2080,7 +2132,7 @@ export default function NeonSynthPad() {
             </div>
 
             {/* Pad Array */}
-            <div className="relative w-full flex-1 flex items-end gap-1.5 pt-4 pb-2 overflow-x-auto md:overflow-x-visible no-scrollbar">
+            <div className="relative w-full flex-1 flex items-stretch gap-1.5 pt-4 pb-2 overflow-x-auto md:overflow-x-visible no-scrollbar">
               {Array.from({ length: numNotes })
                 .map((_, i) => i)
                 .filter(i => !hideDisabled || !disabledNotes.has(i))
@@ -2104,10 +2156,10 @@ export default function NeonSynthPad() {
 
                   const renderShape = () => {
                     if (activeIndices.length === 0 || isDisabled) return null;
-                    const baseIconSize = Math.max(11, Math.min(26, 360 / numNotes));
-                    const baseDotSize = Math.max(5, Math.min(10, 120 / numNotes));
+                    const baseIconSize = Math.max(12, Math.min(26, 360 / numNotes));
+                    const baseDotSize = Math.max(6, Math.min(10, 120 / numNotes));
                     const containerClass =
-                      "absolute left-0 right-0 bottom-[84px] h-[48px] flex items-center justify-center pointer-events-none z-10";
+                      "absolute inset-x-0 top-8 bottom-16 flex items-center justify-center pointer-events-none z-10";
 
                     const iconProps = {
                       size: baseIconSize,
@@ -2164,7 +2216,7 @@ export default function NeonSynthPad() {
                     : activeIndices.length > 0
                     ? `linear-gradient(180deg, ${displayColor}14 0%, rgba(10, 15, 28, 0.85) 45%, rgba(6, 9, 17, 0.95) 100%)`
                     : accidental
-                    ? "linear-gradient(180deg, rgba(15, 23, 42, 0.65) 0%, rgba(6, 9, 18, 0.95) 100%)"
+                    ? "linear-gradient(180deg, rgba(15, 23, 42, 0.75) 0%, rgba(6, 9, 18, 0.98) 100%)"
                     : "linear-gradient(180deg, rgba(30, 41, 59, 0.45) 0%, rgba(11, 16, 29, 0.95) 100%)";
 
                   const padBorderColor = isBinding
@@ -2209,9 +2261,9 @@ export default function NeonSynthPad() {
                           ? "0 0 24px rgba(255,255,255,0.35)"
                           : "inset 0 1px 0 rgba(255,255,255,0.06)",
                         opacity: isDisabled ? 0.25 : 1,
-                        height: `${62 + (i % 12) * 3.1}%`,
+                        height: "100%",
                       }}
-                      className={`group relative rounded-lg border transition-all duration-150 flex-shrink-0 w-11 md:w-auto md:flex-1 md:min-w-0 ${
+                      className={`group relative rounded-lg border transition-all duration-150 flex-shrink-0 w-11 md:w-auto md:flex-1 md:min-w-0 h-full ${
                         isBinding ? "z-20 scale-[1.03] ring-2 ring-white/40" : ""
                       } ${
                         editMode ? "cursor-pointer" : "cursor-crosshair"
@@ -2323,7 +2375,7 @@ export default function NeonSynthPad() {
                   const totalContentHeight = renderedNoteIndices.length * rowHeight;
                   const pianoRollTop = 32;
 
-                  const step = Math.floor(x / stepWidth);
+                  const step = Math.floor(x / effectiveStepWidth);
                   const renderedIdx = Math.floor(
                     (totalContentHeight - (y + scrollY - pianoRollTop)) / rowHeight
                   );
@@ -2348,16 +2400,16 @@ export default function NeonSynthPad() {
                 }}
               >
                 <div
-                  className="flex flex-col-reverse min-w-max min-h-full relative"
-                  style={{ width: `${numSteps * stepWidth + 52}px` }}
+                  className="flex flex-col-reverse min-w-full min-h-full relative"
+                  style={{ width: `${Math.max(containerWidth, numSteps * effectiveStepWidth + 52)}px` }}
                 >
                   {/* Marquee Selection Box */}
                   {selectionRect && (
                     <div
                       style={{
-                        left: `${Math.min(selectionRect.s1, selectionRect.s2) * stepWidth + 52}px`,
+                        left: `${Math.min(selectionRect.s1, selectionRect.s2) * effectiveStepWidth + 52}px`,
                         bottom: `${Math.min(selectionRect.n1, selectionRect.n2) * rowHeight}px`,
-                        width: `${(Math.abs(selectionRect.s2 - selectionRect.s1) + 1) * stepWidth}px`,
+                        width: `${(Math.abs(selectionRect.s2 - selectionRect.s1) + 1) * effectiveStepWidth}px`,
                         height: `${(Math.abs(selectionRect.n2 - selectionRect.n1) + 1) * rowHeight}px`,
                         zIndex: 40,
                       }}
@@ -2401,7 +2453,7 @@ export default function NeonSynthPad() {
                         </div>
 
                         <div
-                          style={{ width: `${Math.min(viewportSteps.start, numSteps) * stepWidth}px` }}
+                          style={{ width: `${Math.min(viewportSteps.start, numSteps) * effectiveStepWidth}px` }}
                           className="flex-shrink-0 h-full pointer-events-none"
                         />
 
@@ -2552,7 +2604,7 @@ export default function NeonSynthPad() {
                                 onMouseLeave={() => {
                                   setHoveredCell(null);
                                 }}
-                                style={{ width: `${stepWidth}px` }}
+                                style={{ width: `${effectiveStepWidth}px` }}
                                 className={`flex-shrink-0 border-r ${
                                   isBarStart
                                     ? "border-r-slate-700/70"
@@ -2595,9 +2647,9 @@ export default function NeonSynthPad() {
                                         style={{
                                           backgroundColor: "#22d3ee",
                                           opacity: 0.3,
-                                          left: `${dragDelta.ds * stepWidth}px`,
+                                          left: `${dragDelta.ds * effectiveStepWidth}px`,
                                           bottom: `${(t - renderedIdx) * rowHeight}px`,
-                                          width: `${stepWidth}px`,
+                                          width: `${effectiveStepWidth}px`,
                                           height: `${rowHeight - 2}px`,
                                           zIndex: 40,
                                         }}
@@ -2742,7 +2794,7 @@ export default function NeonSynthPad() {
                             setHoveredCell(prev => ({ step: i, note: prev?.note ?? -1 }))
                           }
                           onMouseLeave={() => !isTouchDevice && setHoveredCell(null)}
-                          style={{ width: `${stepWidth}px` }}
+                          style={{ width: `${effectiveStepWidth}px` }}
                           className={`flex-shrink-0 h-full flex items-center justify-center text-[10px] font-semibold border-r ${
                             i % 16 === 0
                               ? "border-r-slate-700"
@@ -2813,16 +2865,16 @@ export default function NeonSynthPad() {
                       Zoom
                     </span>
                     <button
-                      onClick={() => setStepWidth(prev => Math.max(12, prev - 4))}
+                      onClick={() => setStepWidth(prev => Math.max(16, prev - 8))}
                       className="w-5 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300"
                     >
                       -
                     </button>
                     <div className="px-2 text-[10px] font-semibold text-slate-300 border-x border-slate-800">
-                      {stepWidth}px
+                      {effectiveStepWidth}px
                     </div>
                     <button
-                      onClick={() => setStepWidth(prev => Math.min(64, prev + 4))}
+                      onClick={() => setStepWidth(prev => Math.min(160, prev + 8))}
                       className="w-5 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300"
                     >
                       +

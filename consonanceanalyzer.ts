@@ -599,7 +599,18 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
     };
   }, [interval, orbitPoints]);
 
-  return <canvas ref={canvasRef} className="w-full h-full block" />;
+  return (
+    <canvas
+      ref={canvasRef}
+      role="img"
+      aria-label={
+        interval
+          ? `Harmonic scope: ${interval.name}, ${interval.consonance} consonance, ${interval.percentage}`
+          : "Harmonic oscilloscope vector scope idle"
+      }
+      className="w-full h-full block"
+    />
+  );
 };
 
 export default function NeonSynthPad() {
@@ -663,6 +674,7 @@ export default function NeonSynthPad() {
   >(null);
   const liveHoverRef = useRef<{ step: number; note: number } | null>(null);
   const [viewportSteps, setViewportSteps] = useState({ start: 0, end: 20 });
+  const [autoScroll, setAutoScroll] = useState(true);
   const [isTouchDevice, setIsTouchDevice] = useState(false);
   const [hasInteracted, setHasInteracted] = useState(false);
   const [midiStatus, setMidiStatus] = useState<
@@ -937,6 +949,26 @@ export default function NeonSynthPad() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [viewMode]);
+
+  useEffect(() => {
+    if (!isPlaying || !autoScroll || !scrollRef.current) return;
+    const container = scrollRef.current;
+    const playheadX = currentStep * effectiveStepWidth + 52;
+    const viewLeft = container.scrollLeft;
+    const viewRight = viewLeft + container.clientWidth;
+
+    if (playheadX >= viewRight - 80) {
+      container.scrollTo({
+        left: Math.max(0, playheadX - 100),
+        behavior: "smooth",
+      });
+    } else if (playheadX < viewLeft + 52) {
+      container.scrollTo({
+        left: Math.max(0, playheadX - 52),
+        behavior: "smooth",
+      });
+    }
+  }, [currentStep, isPlaying, autoScroll, effectiveStepWidth]);
 
   const nextNoteTimeRef = useRef<number>(0);
   const currentStepRef = useRef<number>(0);
@@ -1630,13 +1662,24 @@ export default function NeonSynthPad() {
       {/* Hardware Engine Initialization Modal */}
       {!hasInteracted && (
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="audio-init-title"
           onClick={handleInteraction}
-          className="fixed inset-0 z-[100] bg-[#03050a]/90 backdrop-blur-md flex items-center justify-center cursor-pointer"
+          onKeyDown={e => {
+            if (e.key === "Enter" || e.key === " " || e.key === "Escape") {
+              e.preventDefault();
+              handleInteraction();
+            }
+          }}
+          tabIndex={0}
+          autoFocus
+          className="fixed inset-0 z-[100] bg-[#03050a]/90 backdrop-blur-md flex items-center justify-center cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
         >
-          <div className="hw-panel rounded-xl p-7 max-w-md w-full mx-4 border border-cyan-500/20 shadow-[0_0_60px_-15px_rgba(34,211,238,0.2)] transition-all hover:border-cyan-400/40">
+          <div className="hw-panel rounded-xl p-7 max-w-md w-full mx-4 border border-cyan-500/30 shadow-2xl shadow-cyan-950/40 transition-all hover:border-cyan-400/50">
             <div className="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-5">
               <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]" />
+                <span className="w-2 h-2 rounded-full bg-cyan-400" />
                 <span className="text-[10px] tracking-[0.22em] uppercase text-slate-400 font-semibold">
                   SYS // HARMONIC ENGINE v2.4
                 </span>
@@ -1644,22 +1687,27 @@ export default function NeonSynthPad() {
               <span className="text-[10px] text-slate-500">12-TET / JUST RATIO</span>
             </div>
 
-            <div className="font-display text-2xl font-semibold tracking-tight text-white">
+            <h1 id="audio-init-title" className="font-display text-2xl font-semibold tracking-tight text-white">
               Consonance Synthesizer &amp; Vector Scope
-            </div>
+            </h1>
             <p className="mt-2 text-xs text-slate-400 leading-relaxed">
               Real-time harmonic tension analyzer, polyphonic synth pad, and bass-demodulated
               phasor sequencer.
             </p>
 
-            <div className="mt-6 flex items-center justify-between px-4 py-3 rounded-lg bg-cyan-500/10 border border-cyan-400/30 text-cyan-300">
+            <button
+              type="button"
+              onClick={handleInteraction}
+              aria-label="Initialize Audio & MIDI I/O"
+              className="mt-6 w-full flex items-center justify-between px-4 py-3 rounded-lg bg-cyan-500/15 border border-cyan-400/40 text-cyan-300 hover:bg-cyan-500/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 transition-colors cursor-pointer"
+            >
               <span className="text-xs font-semibold tracking-[0.16em] uppercase">
                 Initialize Audio &amp; MIDI I/O
               </span>
               <span className="text-[10px] px-2 py-0.5 rounded bg-cyan-400/20 text-cyan-200 font-bold">
-                CLICK ANYWHERE
+                PRESS ENTER / CLICK
               </span>
-            </div>
+            </button>
           </div>
         </div>
       )}
@@ -1722,22 +1770,25 @@ export default function NeonSynthPad() {
                 )}
               </div>
 
-              {/* Harmonic Legend Key */}
-              <div className="flex items-center gap-2.5 text-[9px] text-slate-500">
-                <span className="flex items-center gap-1">
-                  <i className="w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block" />
+              {/* Harmonic Legend Key with Geometric Consonance Glyphs */}
+              <div
+                className="flex items-center gap-2 text-[9px] text-slate-400"
+                title="Consonance classification: Diamond = Perfect (1/1, 2/1, 3/2), Circle = Consonant (3rds, 6ths, 4th), Triangle = Mild (2nd, 7th), Dot = Dissonant (Tritone, semitones)"
+              >
+                <span className="flex items-center gap-1 text-cyan-300" title="Perfect Consonance: Unison (1/1), Octave (2/1), Perfect 5th (3/2)">
+                  <Diamond size={8} className="fill-current text-cyan-400" />
                   Perf
                 </span>
-                <span className="flex items-center gap-1">
-                  <i className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+                <span className="flex items-center gap-1 text-emerald-300" title="Consonant: Major/Minor 3rds & 6ths, Perfect 4th (4/3)">
+                  <Circle size={8} className="fill-current text-emerald-400" />
                   Cons
                 </span>
-                <span className="flex items-center gap-1">
-                  <i className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+                <span className="flex items-center gap-1 text-amber-300" title="Mild Tension: Major 2nd (9/8), Minor 7th (16/9)">
+                  <Triangle size={8} className="fill-current text-amber-400" />
                   Mild
                 </span>
-                <span className="flex items-center gap-1">
-                  <i className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block" />
+                <span className="flex items-center gap-1 text-rose-300" title="Dissonant Tension: Tritone (45/32), Minor 2nd (16/15), Major 7th (15/8)">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block" />
                   Diss
                 </span>
               </div>
@@ -1759,7 +1810,8 @@ export default function NeonSynthPad() {
               <div className="hw-well rounded-lg p-0.5 flex items-center h-8">
                 <button
                   onClick={() => setIsPlaying(!isPlaying)}
-                  className={`h-full px-3 rounded-md flex items-center gap-1.5 text-[11px] font-semibold tracking-wider transition-all ${
+                  aria-label={isPlaying ? "Stop sequence playback" : "Start sequence playback"}
+                  className={`h-full px-3 rounded-md flex items-center gap-1.5 text-[11px] font-semibold tracking-wider transition-all focus-visible:ring-2 focus-visible:ring-cyan-400 focus:outline-none ${
                     isPlaying
                       ? "bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-[0_0_12px_rgba(244,63,94,0.25)]"
                       : "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25"
@@ -1785,16 +1837,25 @@ export default function NeonSynthPad() {
                 </span>
                 <button
                   onClick={() => setBpm(prev => Math.max(40, prev - 1))}
-                  className="w-5 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300"
+                  aria-label="Decrease BPM"
+                  className="w-5 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
                 >
                   -
                 </button>
-                <div className="px-1.5 text-xs font-semibold text-emerald-400 border-x border-slate-800 min-w-[2.2rem] text-center">
+                <div
+                  role="spinbutton"
+                  aria-label="Master Tempo in BPM"
+                  aria-valuenow={bpm}
+                  aria-valuemin={40}
+                  aria-valuemax={240}
+                  className="px-1.5 text-xs font-semibold text-emerald-400 border-x border-slate-800 min-w-[2.2rem] text-center"
+                >
                   {bpm}
                 </div>
                 <button
                   onClick={() => setBpm(prev => Math.min(240, prev + 1))}
-                  className="w-5 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300"
+                  aria-label="Increase BPM"
+                  className="w-5 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
                 >
                   +
                 </button>
@@ -1845,16 +1906,25 @@ export default function NeonSynthPad() {
                 </span>
                 <button
                   onClick={() => setNumNotes(prev => Math.max(1, prev - 1))}
-                  className="w-6 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300"
+                  aria-label="Decrease note span"
+                  className="w-6 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
                 >
                   -
                 </button>
-                <div className="px-2 text-xs font-semibold text-white border-x border-slate-800 min-w-[2.25rem] text-center">
+                <div
+                  role="spinbutton"
+                  aria-label="Note Span"
+                  aria-valuenow={numNotes}
+                  aria-valuemin={1}
+                  aria-valuemax={60}
+                  className="px-2 text-xs font-semibold text-white border-x border-slate-800 min-w-[2.25rem] text-center"
+                >
                   {numNotes}
                 </div>
                 <button
                   onClick={() => setNumNotes(prev => Math.min(60, prev + 1))}
-                  className="w-6 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300"
+                  aria-label="Increase note span"
+                  className="w-6 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
                 >
                   +
                 </button>
@@ -1866,16 +1936,25 @@ export default function NeonSynthPad() {
                 </span>
                 <button
                   onClick={() => setOctave(prev => Math.max(1, prev - 1))}
-                  className="w-6 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300"
+                  aria-label="Decrease base octave"
+                  className="w-6 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
                 >
                   -
                 </button>
-                <div className="px-2 text-xs font-semibold text-cyan-300 border-x border-slate-800 min-w-[2.25rem] text-center">
+                <div
+                  role="spinbutton"
+                  aria-label="Base Octave"
+                  aria-valuenow={octave}
+                  aria-valuemin={1}
+                  aria-valuemax={8}
+                  className="px-2 text-xs font-semibold text-cyan-300 border-x border-slate-800 min-w-[2.25rem] text-center"
+                >
                   C{octave}
                 </div>
                 <button
                   onClick={() => setOctave(prev => Math.min(8, prev + 1))}
-                  className="w-6 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300"
+                  aria-label="Increase base octave"
+                  className="w-6 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
                 >
                   +
                 </button>
@@ -1942,16 +2021,25 @@ export default function NeonSynthPad() {
                   <div className="flex items-center gap-1 px-1.5 border-l border-slate-800 ml-0.5">
                     <button
                       onClick={() => setChordVolumeDb(prev => Math.max(-6, prev - 1))}
-                      className="w-4 h-5 flex items-center justify-center hover:bg-white/10 rounded text-[10px] text-slate-300"
+                      aria-label="Decrease chord volume"
+                      className="w-4 h-5 flex items-center justify-center hover:bg-white/10 rounded text-[10px] text-slate-300 focus-visible:ring-1 focus-visible:ring-amber-400 focus:outline-none"
                     >
                       -
                     </button>
-                    <span className="text-[10px] font-semibold text-amber-300 min-w-[2.1rem] text-center">
+                    <span
+                      role="spinbutton"
+                      aria-label="Chord volume in decibels"
+                      aria-valuenow={chordVolumeDb}
+                      aria-valuemin={-6}
+                      aria-valuemax={-1}
+                      className="text-[10px] font-semibold text-amber-300 min-w-[2.1rem] text-center"
+                    >
                       {chordVolumeDb}dB
                     </span>
                     <button
                       onClick={() => setChordVolumeDb(prev => Math.min(-1, prev + 1))}
-                      className="w-4 h-5 flex items-center justify-center hover:bg-white/10 rounded text-[10px] text-slate-300"
+                      aria-label="Increase chord volume"
+                      className="w-4 h-5 flex items-center justify-center hover:bg-white/10 rounded text-[10px] text-slate-300 focus-visible:ring-1 focus-visible:ring-amber-400 focus:outline-none"
                     >
                       +
                     </button>
@@ -1960,7 +2048,8 @@ export default function NeonSynthPad() {
                 <button
                   disabled={viewMode === "pad"}
                   onClick={() => setEditTool("select")}
-                  className={`h-full px-2.5 rounded-md flex items-center gap-1 text-[10px] font-semibold uppercase transition-all ${
+                  aria-label="Marquee Select Tool"
+                  className={`h-full px-2.5 rounded-md flex items-center gap-1 text-[10px] font-semibold uppercase transition-all focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none ${
                     editTool === "select"
                       ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
                       : "text-slate-400 hover:text-white"
@@ -1980,7 +2069,8 @@ export default function NeonSynthPad() {
                 <button
                   onClick={copySelection}
                   disabled={selectedKeys.size === 0 || viewMode === "pad"}
-                  className={`h-full px-2 rounded flex items-center gap-1 text-[10px] font-semibold transition-colors ${
+                  aria-label="Copy selected notes (Ctrl+C)"
+                  className={`h-full px-2 rounded flex items-center gap-1 text-[10px] font-semibold transition-colors focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none ${
                     selectedKeys.size > 0
                       ? "text-cyan-300 hover:bg-cyan-500/10"
                       : "text-slate-600"
@@ -1993,7 +2083,8 @@ export default function NeonSynthPad() {
                 <button
                   onClick={cutSelection}
                   disabled={selectedKeys.size === 0 || viewMode === "pad"}
-                  className={`h-full px-2 rounded flex items-center gap-1 text-[10px] font-semibold transition-colors ${
+                  aria-label="Cut selected notes (Ctrl+X)"
+                  className={`h-full px-2 rounded flex items-center gap-1 text-[10px] font-semibold transition-colors focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none ${
                     selectedKeys.size > 0
                       ? "text-cyan-300 hover:bg-cyan-500/10"
                       : "text-slate-600"
@@ -2006,7 +2097,8 @@ export default function NeonSynthPad() {
                 <button
                   onClick={() => pasteSelection(false)}
                   disabled={!clipboard || viewMode === "pad"}
-                  className={`h-full px-2 rounded flex items-center gap-1 text-[10px] font-semibold transition-colors ${
+                  aria-label="Paste notes (Ctrl+V)"
+                  className={`h-full px-2 rounded flex items-center gap-1 text-[10px] font-semibold transition-colors focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none ${
                     clipboard ? "text-emerald-300 hover:bg-emerald-500/10" : "text-slate-600"
                   }`}
                   title="Paste (Ctrl+V)"
@@ -2018,7 +2110,8 @@ export default function NeonSynthPad() {
                 <button
                   onClick={deleteSelectedNotes}
                   disabled={selectedKeys.size === 0 || viewMode === "pad"}
-                  className={`h-full px-2 rounded flex items-center gap-1 text-[10px] font-semibold transition-colors ${
+                  aria-label="Delete selected notes (Delete)"
+                  className={`h-full px-2 rounded flex items-center gap-1 text-[10px] font-semibold transition-colors focus-visible:ring-1 focus-visible:ring-rose-400 focus:outline-none ${
                     selectedKeys.size > 0 ? "text-rose-400 hover:bg-rose-500/10" : "text-slate-600"
                   }`}
                   title="Delete Selected (Del)"
@@ -2033,7 +2126,8 @@ export default function NeonSynthPad() {
               <div className="hw-well rounded-lg p-0.5 flex items-center h-8">
                 <button
                   onClick={() => setHideDisabled(!hideDisabled)}
-                  className={`h-full px-2.5 rounded-md flex items-center gap-1 text-[10px] font-semibold uppercase transition-all ${
+                  aria-label={hideDisabled ? "Show disabled pads" : "Hide disabled pads"}
+                  className={`h-full px-2.5 rounded-md flex items-center gap-1 text-[10px] font-semibold uppercase transition-all focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none ${
                     hideDisabled
                       ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
                       : "text-slate-400 hover:text-slate-200"
@@ -2049,11 +2143,12 @@ export default function NeonSynthPad() {
                     setEditMode(!editMode);
                     setBindingIndex(null);
                   }}
-                  className={`h-full px-2.5 rounded-md flex items-center gap-1 text-[10px] font-semibold uppercase transition-all ${
+                  aria-label={editMode ? "Exit key binding mode" : "Configure key bindings and mute pads"}
+                  className={`h-full px-2.5 rounded-md flex items-center gap-1 text-[10px] font-semibold uppercase transition-all focus-visible:ring-1 focus-visible:ring-amber-400 focus:outline-none ${
                     viewMode === "roll"
                       ? "opacity-30 cursor-not-allowed text-slate-600"
                       : editMode
-                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.2)]"
+                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
                       : "text-slate-400 hover:text-slate-200"
                   }`}
                   title="Configure Key Bindings & Mute Pads"
@@ -2066,7 +2161,8 @@ export default function NeonSynthPad() {
               <div className="hw-well rounded-lg p-0.5 flex items-center h-8">
                 <button
                   onClick={exportSequence}
-                  className="h-full px-2 hover:bg-white/5 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200 flex items-center gap-1"
+                  aria-label="Export sequence to JSON file"
+                  className="h-full px-2 hover:bg-white/5 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200 flex items-center gap-1 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
                   title="Export JSON Sequence"
                 >
                   <Download size={11} />
@@ -2074,7 +2170,8 @@ export default function NeonSynthPad() {
                 </button>
                 <div className="w-[1px] h-4 bg-slate-800" />
                 <label
-                  className="h-full px-2 hover:bg-white/5 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200 flex items-center gap-1 cursor-pointer"
+                  aria-label="Import sequence from JSON file"
+                  className="h-full px-2 hover:bg-white/5 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200 flex items-center gap-1 cursor-pointer focus-within:ring-1 focus-within:ring-cyan-400"
                   title="Import JSON Sequence"
                 >
                   <Upload size={11} />
@@ -2234,6 +2331,31 @@ export default function NeonSynthPad() {
                   return (
                     <div
                       key={i}
+                      role="button"
+                      tabIndex={isDisabled ? -1 : 0}
+                      aria-label={`Note ${noteLabel}${noteOctave}, ${type !== "neutral" ? BUCKET_TEXT[type as Bucket] : "neutral consonance"}${keyBindings[i]?.length ? `, key ${keyBindings[i].join(" ")}` : ""}`}
+                      aria-pressed={isActive}
+                      aria-disabled={isDisabled}
+                      onKeyDown={e => {
+                        if (editMode) {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            if (bindingIndex === i) toggleNoteDisabled(i);
+                            else setBindingIndex(i);
+                          }
+                        } else {
+                          if ((e.key === "Enter" || e.key === " ") && !e.repeat) {
+                            e.preventDefault();
+                            startNote(i, "keyboard");
+                          }
+                        }
+                      }}
+                      onKeyUp={e => {
+                        if (!editMode && (e.key === "Enter" || e.key === " ")) {
+                          e.preventDefault();
+                          stopNote(i, "keyboard");
+                        }
+                      }}
                       onMouseDown={() => !editMode && startNote(i, "mouse")}
                       onMouseEnter={e => !editMode && e.buttons === 1 && startNote(i, "mouse")}
                       onMouseUp={() => !editMode && stopNote(i, "mouse")}
@@ -2267,7 +2389,7 @@ export default function NeonSynthPad() {
                         isBinding ? "z-20 scale-[1.03] ring-2 ring-white/40" : ""
                       } ${
                         editMode ? "cursor-pointer" : "cursor-crosshair"
-                      } overflow-hidden`}
+                      } focus-visible:ring-2 focus-visible:ring-cyan-400 focus-visible:outline-none focus:z-30 overflow-hidden`}
                     >
                       {/* Top Phosphor LED Bar */}
                       <div
@@ -2844,16 +2966,25 @@ export default function NeonSynthPad() {
                     </span>
                     <button
                       onClick={() => setNumSteps(prev => Math.max(4, prev - 4))}
-                      className="w-5 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300"
+                      aria-label="Decrease pattern steps"
+                      className="w-5 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
                     >
                       -
                     </button>
-                    <div className="px-2 text-[11px] font-semibold text-cyan-300 border-x border-slate-800 min-w-[2.2rem] text-center">
+                    <div
+                      role="spinbutton"
+                      aria-label="Pattern Steps"
+                      aria-valuenow={numSteps}
+                      aria-valuemin={4}
+                      aria-valuemax={1024}
+                      className="px-2 text-[11px] font-semibold text-cyan-300 border-x border-slate-800 min-w-[2.2rem] text-center"
+                    >
                       {numSteps}
                     </div>
                     <button
                       onClick={() => setNumSteps(prev => Math.min(1024, prev + 4))}
-                      className="w-5 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300"
+                      aria-label="Increase pattern steps"
+                      className="w-5 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
                     >
                       +
                     </button>
@@ -2866,16 +2997,25 @@ export default function NeonSynthPad() {
                     </span>
                     <button
                       onClick={() => setStepWidth(prev => Math.max(16, prev - 8))}
-                      className="w-5 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300"
+                      aria-label="Zoom out sequencer step width"
+                      className="w-5 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
                     >
                       -
                     </button>
-                    <div className="px-2 text-[10px] font-semibold text-slate-300 border-x border-slate-800">
+                    <div
+                      role="spinbutton"
+                      aria-label="Step Width Zoom"
+                      aria-valuenow={effectiveStepWidth}
+                      aria-valuemin={16}
+                      aria-valuemax={160}
+                      className="px-2 text-[10px] font-semibold text-slate-300 border-x border-slate-800"
+                    >
                       {effectiveStepWidth}px
                     </div>
                     <button
                       onClick={() => setStepWidth(prev => Math.min(160, prev + 8))}
-                      className="w-5 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300"
+                      aria-label="Zoom in sequencer step width"
+                      className="w-5 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
                     >
                       +
                     </button>
@@ -2901,12 +3041,28 @@ export default function NeonSynthPad() {
                       min="40"
                       max="240"
                       value={bpm}
+                      aria-label="Master tempo in beats per minute"
                       onMouseDown={e => e.stopPropagation()}
                       onMouseUp={e => e.currentTarget.blur()}
                       onChange={e => setBpm(parseInt(e.target.value))}
-                      className="w-28 hw-slider"
+                      className="w-28 hw-slider focus-visible:ring-1 focus-visible:ring-emerald-400 focus:outline-none"
                     />
                   </div>
+
+                  {/* Playhead Auto-Scroll Follow Toggle */}
+                  <button
+                    onClick={() => setAutoScroll(prev => !prev)}
+                    className={`hw-well rounded-lg px-2 h-7 flex items-center gap-1.5 text-[9px] uppercase tracking-wider font-semibold transition-all focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none ${
+                      autoScroll
+                        ? "text-cyan-300 border border-cyan-500/40 bg-cyan-950/20"
+                        : "text-slate-500 border border-slate-800"
+                    }`}
+                    title="Toggle automatic playhead viewport tracking during playback"
+                    aria-label={`Toggle playhead auto-scroll (currently ${autoScroll ? "enabled" : "disabled"})`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${autoScroll ? "bg-cyan-400" : "bg-slate-600"}`} />
+                    <span>Follow</span>
+                  </button>
                 </div>
 
                 <div className="text-[10px] text-slate-500 uppercase tracking-wider hidden md:block">

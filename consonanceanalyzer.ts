@@ -206,8 +206,10 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
   const trailRef = useRef<{ x: number; y: number }[]>([]);
   const lastKeyRef = useRef<string>("");
 
-  const orbitPoints = React.useMemo(() => {
-    if (!interval || interval.type !== "chord" || interval.pitches.length < 3) return [];
+  const orbitData = React.useMemo(() => {
+    if (!interval || interval.type !== "chord" || interval.pitches.length < 3) {
+      return { pts: [] as { x: number; y: number }[], minX: -1, maxX: 1, minY: -1, maxY: 1 };
+    }
     const pitches = [...interval.pitches].sort((a, b) => a - b);
     const N = pitches.length;
     const bass = pitches[0];
@@ -215,6 +217,11 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
     const period = computeOrbitPeriod(pitches);
     const steps = 720;
     const pts: { x: number; y: number }[] = [];
+
+    let minX = 0;
+    let maxX = 0;
+    let minY = 0;
+    let maxY = 0;
 
     for (let i = 0; i <= steps; i++) {
       const tau = (i / steps) * period;
@@ -224,13 +231,19 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         const angle = deltas[k] * tau;
         re += Math.cos(angle);
         im += Math.sin(angle);
+        const jx = re / N;
+        const jy = im / N;
+        if (jx < minX) minX = jx;
+        if (jx > maxX) maxX = jx;
+        if (jy < minY) minY = jy;
+        if (jy > maxY) maxY = jy;
       }
       pts.push({
         x: re / N,
         y: im / N,
       });
     }
-    return pts;
+    return { pts, minX, maxX, minY, maxY };
   }, [interval]);
 
   useEffect(() => {
@@ -261,7 +274,7 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
       ctx.font = "600 8.5px 'JetBrains Mono', monospace";
       ctx.textAlign = align;
       ctx.strokeStyle = "rgba(3, 6, 12, 0.92)";
-      ctx.lineWidth = 3.5;
+      ctx.lineWidth = 3.2;
       ctx.lineJoin = "round";
       ctx.strokeText(text, x, y);
       ctx.fillStyle = color;
@@ -327,32 +340,10 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
       }
       ctx.stroke();
 
-      // Primary X/Y axes with micro-subdivision ticks
-      ctx.strokeStyle = "#334155";
-      ctx.globalAlpha = 0.45;
-      ctx.beginPath();
-      ctx.moveTo(0, cy);
-      ctx.lineTo(width, cy);
-      ctx.moveTo(cx, 0);
-      ctx.lineTo(cx, height);
-      for (let x = cx - gridSize * 6; x <= cx + gridSize * 6; x += gridSize / 2) {
-        if (x > 0 && x < width) {
-          ctx.moveTo(x, cy - 2);
-          ctx.lineTo(x, cy + 2);
-        }
-      }
-      for (let y = cy - gridSize * 4; y <= cy + gridSize * 4; y += gridSize / 2) {
-        if (y > 0 && y < height) {
-          ctx.moveTo(cx - 2, y);
-          ctx.lineTo(cx + 2, y);
-        }
-      }
-      ctx.stroke();
-
       // Corner reticle brackets
-      const bLen = 7;
+      const bLen = 6;
       ctx.strokeStyle = "#475569";
-      ctx.globalAlpha = 0.7;
+      ctx.globalAlpha = 0.65;
       ctx.beginPath();
       ctx.moveTo(5, 5 + bLen); ctx.lineTo(5, 5); ctx.lineTo(5 + bLen, 5);
       ctx.moveTo(width - 5 - bLen, 5); ctx.lineTo(width - 5, 5); ctx.lineTo(width - 5, 5 + bLen);
@@ -363,6 +354,17 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
       ctx.globalAlpha = 1;
 
       if (!interval) {
+        // Center crosshair
+        ctx.strokeStyle = "#334155";
+        ctx.globalAlpha = 0.45;
+        ctx.beginPath();
+        ctx.moveTo(cx - 14, cy);
+        ctx.lineTo(cx + 14, cy);
+        ctx.moveTo(cx, cy - 14);
+        ctx.lineTo(cx, cy + 14);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+
         // Standby carrier trace when fewer than 2 notes have been played
         phaseRef.current = (phaseRef.current + 1.4 * dt) % (Math.PI * 2);
         ctx.beginPath();
@@ -392,6 +394,16 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
 
       if (interval.type === "interval") {
         // --- LISSAJOUS PREVIEW (2 NOTES) ---
+        ctx.strokeStyle = "#334155";
+        ctx.globalAlpha = 0.4;
+        ctx.beginPath();
+        ctx.moveTo(0, cy);
+        ctx.lineTo(width, cy);
+        ctx.moveTo(cx, 0);
+        ctx.lineTo(cx, height);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+
         const [p1, p2] = interval.pitches;
         const diff = Math.abs(p2 - p1);
 
@@ -474,49 +486,51 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         const N = pitches.length;
         const bass = pitches[0];
 
-        // Maximize polar dial radius so chord orbits have generous screen space
-        const R = Math.min(width * 0.42, (height / 2) * 0.85);
+        // Auto-fit & center the active orbit bounding box so chord vectors have generous space
+        const { pts: orbitPoints, minX, maxX, minY, maxY } = orbitData;
+        const spanX = Math.max(0.65, maxX - minX);
+        const spanY = Math.max(0.65, maxY - minY);
+        const availW = Math.max(120, width - 56);
+        const availH = Math.max(72, height - 34);
+
+        const R = Math.min(availW / spanX, availH / spanY, height * 0.74);
+        const ox = cx - ((minX + maxX) / 2) * R;
+        const oy = cy + ((minY + maxY) / 2) * R;
+
         const armLength = R / N;
         const deltaFreqs = pitches.map(p => getDeltaFreq(p - bass));
 
-        const animSpeed = 1.15;
+        const animSpeed = 1.1;
         phaseRef.current = (phaseRef.current + animSpeed * dt) % (Math.PI * 200);
         const t = phaseRef.current;
 
-        // 1. Unit Reference Circle (|Z| = 1.0) & Half-Amplitude Ring
-        ctx.strokeStyle = "rgba(51, 65, 85, 0.35)";
+        // 1. Origin Crosshair & Unit Reference Circle (|Z| = 1.0)
+        ctx.strokeStyle = "rgba(51, 65, 85, 0.5)";
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.arc(cx, cy, R * 0.5, 0, Math.PI * 2);
+        ctx.moveTo(0, oy);
+        ctx.lineTo(width, oy);
+        ctx.moveTo(ox, 0);
+        ctx.lineTo(ox, height);
         ctx.stroke();
 
-        ctx.strokeStyle = "rgba(71, 85, 105, 0.65)";
+        ctx.strokeStyle = "rgba(71, 85, 105, 0.55)";
         ctx.setLineDash([2, 4]);
         ctx.beginPath();
-        ctx.arc(cx, cy, R, 0, Math.PI * 2);
+        ctx.arc(ox, oy, R, 0, Math.PI * 2);
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Polar degree ticks around |Z|=1
-        ctx.strokeStyle = "#475569";
-        ctx.beginPath();
-        for (let deg = 0; deg < 360; deg += 30) {
-          const rad = (deg * Math.PI) / 180;
-          const innerR = deg % 90 === 0 ? R - 4 : R - 2;
-          const outerR = deg % 90 === 0 ? R + 4 : R + 2;
-          ctx.moveTo(cx + Math.cos(rad) * innerR, cy + Math.sin(rad) * innerR);
-          ctx.lineTo(cx + Math.cos(rad) * outerR, cy + Math.sin(rad) * outerR);
+        if (ox + R + 28 < width) {
+          drawOsdText("|Z|=1", ox + R + 4, oy - 3, "#64748b", "left");
         }
-        ctx.stroke();
 
-        drawOsdText("|Z|=1", cx + R + 5, cy - 3, "#64748b", "left");
-
-        // 2. Closed Resonant Orbit Manifold — 3-Pass Phosphor Bloom matching Lissajous
+        // 2. Closed Resonant Orbit Manifold
         if (orbitPoints.length > 2) {
           ctx.beginPath();
           for (let i = 0; i < orbitPoints.length; i++) {
-            const px = cx + orbitPoints[i].x * R;
-            const py = cy - orbitPoints[i].y * R;
+            const px = ox + orbitPoints[i].x * R;
+            const py = oy - orbitPoints[i].y * R;
             if (i === 0) ctx.moveTo(px, py);
             else ctx.lineTo(px, py);
           }
@@ -524,50 +538,37 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
 
           // Subtle resonant field fill
           ctx.fillStyle = mainColor;
-          ctx.globalAlpha = 0.06;
+          ctx.globalAlpha = 0.05;
           ctx.fill();
 
-          // Pass 1: Wide outer phosphor halo
+          // Outer phosphor glow
           ctx.shadowColor = mainColor;
-          ctx.shadowBlur = 14;
+          ctx.shadowBlur = 10;
           ctx.strokeStyle = mainColor;
-          ctx.lineWidth = 4.0;
-          ctx.globalAlpha = 0.35;
+          ctx.lineWidth = 3.0;
+          ctx.globalAlpha = 0.3;
           ctx.stroke();
 
-          // Pass 2: High-visibility saturated core (matches Lissajous brightness)
-          ctx.shadowBlur = 8;
+          // Crisp orbit trace
+          ctx.shadowBlur = 4;
           ctx.strokeStyle = mainColor;
-          ctx.lineWidth = 2.0;
-          ctx.globalAlpha = 0.92;
+          ctx.lineWidth = 1.5;
+          ctx.globalAlpha = 0.85;
           ctx.stroke();
-
-          // Pass 3: Crisp white hot filament
           ctx.shadowBlur = 0;
-          ctx.strokeStyle = "#ffffff";
-          ctx.lineWidth = 0.7;
-          ctx.globalAlpha = 0.55;
-          ctx.stroke();
           ctx.globalAlpha = 1;
         }
 
         // 3. Tip-to-Tail Demodulated Phasor Chain
-        const joints: { x: number; y: number; pitch: number; angle: number }[] = [
-          { x: cx, y: cy, pitch: bass, angle: 0 },
-        ];
-        let currX = cx;
-        let currY = cy;
+        const joints: { x: number; y: number }[] = [{ x: ox, y: oy }];
+        let currX = ox;
+        let currY = oy;
 
         for (let i = 0; i < N; i++) {
           const angle = deltaFreqs[i] * t;
           currX += armLength * Math.cos(angle);
           currY -= armLength * Math.sin(angle);
-          joints.push({
-            x: currX,
-            y: currY,
-            pitch: pitches[i],
-            angle,
-          });
+          joints.push({ x: currX, y: currY });
         }
 
         const tip = joints[joints.length - 1];
@@ -575,32 +576,43 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         // 4. Moving Phosphor Comet Tail
         const trail = trailRef.current;
         trail.push({ x: tip.x, y: tip.y });
-        if (trail.length > 36) trail.shift();
+        if (trail.length > 32) trail.shift();
 
         if (trail.length > 1) {
           for (let i = 1; i < trail.length; i++) {
-            const alpha = (i / trail.length) * 0.95;
+            const alpha = (i / trail.length) * 0.9;
             ctx.beginPath();
             ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
             ctx.lineTo(trail[i].x, trail[i].y);
             ctx.strokeStyle = "#ffffff";
-            ctx.globalAlpha = alpha * 0.85;
-            ctx.lineWidth = 2.4;
+            ctx.globalAlpha = alpha * 0.8;
+            ctx.lineWidth = 2.0;
             ctx.shadowColor = mainColor;
-            ctx.shadowBlur = 8;
+            ctx.shadowBlur = 6;
             ctx.stroke();
           }
           ctx.globalAlpha = 1;
           ctx.shadowBlur = 0;
         }
 
-        // 5. Phasor Arm Chain with Dark Contrast Under-Stroke for Crisp Separation
+        // 5. Resultant Vector Ray (Origin -> Tip)
+        ctx.strokeStyle = mainColor;
+        ctx.globalAlpha = 0.5;
+        ctx.lineWidth = 1.1;
+        ctx.setLineDash([2, 3]);
+        ctx.beginPath();
+        ctx.moveTo(ox, oy);
+        ctx.lineTo(tip.x, tip.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+
+        // 6. Crisp Phasor Arm Chain (with subtle dark contrast backing)
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
 
-        // Dark contrast halo beneath all phasor vectors
-        ctx.strokeStyle = "rgba(3, 6, 12, 0.85)";
-        ctx.lineWidth = 4.2;
+        ctx.strokeStyle = "rgba(3, 6, 12, 0.75)";
+        ctx.lineWidth = 3.2;
         ctx.beginPath();
         ctx.moveTo(joints[0].x, joints[0].y);
         for (let i = 1; i < joints.length; i++) {
@@ -610,7 +622,7 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
 
         // Stationary Bass Reference Vector (Arm 1)
         ctx.strokeStyle = "#38bdf8";
-        ctx.lineWidth = 2.4;
+        ctx.lineWidth = 2.0;
         ctx.beginPath();
         ctx.moveTo(joints[0].x, joints[0].y);
         ctx.lineTo(joints[1].x, joints[1].y);
@@ -619,7 +631,7 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         // Rotating Upper Voice Vectors (Arms 2..N)
         if (N > 1) {
           ctx.strokeStyle = "#f8fafc";
-          ctx.lineWidth = 1.9;
+          ctx.lineWidth = 1.6;
           ctx.beginPath();
           ctx.moveTo(joints[1].x, joints[1].y);
           for (let i = 2; i < joints.length; i++) {
@@ -628,7 +640,7 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
           ctx.stroke();
         }
 
-        // 6. Joint Nodes & Radially Offset Outlined Note Labels
+        // 7. Un-Cluttered Joint Nodes (no overlapping text inside the spinning chain)
         for (let i = 0; i < joints.length; i++) {
           const j = joints[i];
           const isTip = i === joints.length - 1;
@@ -637,53 +649,38 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
 
           if (isTip) {
             ctx.shadowColor = "#ffffff";
-            ctx.shadowBlur = 12;
+            ctx.shadowBlur = 10;
             ctx.fillStyle = "#ffffff";
             ctx.beginPath();
-            ctx.arc(j.x, j.y, 3.4, 0, Math.PI * 2);
+            ctx.arc(j.x, j.y, 2.8, 0, Math.PI * 2);
             ctx.fill();
 
             ctx.strokeStyle = mainColor;
-            ctx.lineWidth = 1.6;
+            ctx.lineWidth = 1.4;
             ctx.beginPath();
-            ctx.arc(j.x, j.y, 6.5, 0, Math.PI * 2);
+            ctx.arc(j.x, j.y, 5.4, 0, Math.PI * 2);
             ctx.stroke();
             ctx.shadowBlur = 0;
           } else if (isBassAnchor) {
             ctx.fillStyle = "#38bdf8";
-            ctx.strokeStyle = "#03060c";
-            ctx.lineWidth = 1.5;
-            ctx.beginPath();
-            ctx.arc(j.x, j.y, 2.8, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-          } else {
-            ctx.fillStyle = isOrigin ? "#64748b" : "#f8fafc";
             ctx.strokeStyle = "#03060c";
             ctx.lineWidth = 1.2;
             ctx.beginPath();
             ctx.arc(j.x, j.y, 2.3, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
-          }
-
-          if (i > 0) {
-            const dx = j.x - cx;
-            const dy = j.y - cy;
-            const dist = Math.hypot(dx, dy) || 1;
-            const labelX = j.x + (dx / dist) * 9;
-            const labelY = j.y + (dy / dist) * 9 + 3;
-            drawOsdText(
-              noteName(j.pitch),
-              labelX,
-              labelY,
-              isBassAnchor ? "#7dd3fc" : isTip ? "#ffffff" : "#e2e8f0",
-              dx >= 0 ? "left" : "right"
-            );
+          } else {
+            ctx.fillStyle = isOrigin ? "#64748b" : "#f8fafc";
+            ctx.strokeStyle = "#03060c";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(j.x, j.y, 1.9, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
           }
         }
 
-        // 7. Crisp CRT OSD Telemetry Overlays
+        // 8. Corner Telemetry Overlays
         drawOsdText(`DEMODULATED [${N}V]`, 10, 15, "#38bdf8", "left");
         drawOsdText("Z_rel(t) = e^{-iω₀t}·Z(t)", width - 10, 15, "#94a3b8", "right");
 
@@ -692,7 +689,7 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
           .join(" ");
         drawOsdText(deltaStr, 10, height - 8, "#e2e8f0", "left");
 
-        const mag = Math.hypot(tip.x - cx, tip.y - cy) / R;
+        const mag = Math.hypot(tip.x - ox, tip.y - oy) / R;
         drawOsdText(`|Z_rel|:${mag.toFixed(2)}`, width - 10, height - 8, mainColor, "right");
       }
 
@@ -706,7 +703,7 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
       running = false;
       if (animIdRef.current) cancelAnimationFrame(animIdRef.current);
     };
-  }, [interval, orbitPoints]);
+  }, [interval, orbitData]);
 
   return (
     <canvas
@@ -1841,11 +1838,11 @@ export default function NeonSynthPad() {
       {/* TOP STUDIO CONSOLE BAR */}
       <header className="w-full max-w-[1720px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-3 shrink-0 z-30">
         {/* LEFT MODULE: Harmonic Telemetry & Oscilloscope */}
-        <div className="lg:col-span-5 hw-panel rounded-xl p-3 flex items-stretch gap-3.5 relative overflow-hidden">
+        <div className="lg:col-span-5 hw-panel rounded-xl p-2.5 flex items-stretch gap-3 relative overflow-hidden">
           {/* Telemetry Readout Column */}
-          <div className="flex flex-col justify-between w-52 shrink-0">
+          <div className="flex flex-col justify-between w-44 shrink-0">
             <div>
-              <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-slate-400 mb-1">
+              <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.16em] text-slate-400 mb-1">
                 <span className="flex items-center gap-1.5 font-semibold">
                   <span
                     className="w-2 h-2 rounded-full transition-colors duration-200"
@@ -1854,7 +1851,7 @@ export default function NeonSynthPad() {
                       boxShadow: interval ? `0 0 10px ${COLORS[interval.bucket]}` : "none",
                     }}
                   />
-                  Harmonic Readout
+                  Readout
                 </span>
                 {activeNotes.size > 0 && (
                   <span className="text-[9px] text-cyan-400 font-bold tracking-wider">
@@ -1871,7 +1868,7 @@ export default function NeonSynthPad() {
                   >
                     {interval.name}
                   </div>
-                  <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                  <div className="text-[10.5px] text-slate-400 mt-0.5 flex items-center gap-1 flex-wrap">
                     <span>
                       {interval.diff}{" "}
                       {interval.percentage === "Chord Mode" ? "voices" : "semitones"}
@@ -1885,28 +1882,28 @@ export default function NeonSynthPad() {
                   <div className="font-display text-base font-medium text-slate-500 leading-snug">
                     No Interval Active
                   </div>
-                  <div className="text-[11px] text-slate-600 mt-0.5">
-                    Trigger 2+ notes to analyze
+                  <div className="text-[10.5px] text-slate-600 mt-0.5">
+                    Trigger 2+ notes
                   </div>
                 </>
               )}
             </div>
 
-            <div className="flex flex-col gap-1.5 pt-2 border-t border-slate-800/80">
+            <div className="flex flex-col gap-1.5 pt-1.5 border-t border-slate-800/80">
               <div className="flex items-center justify-between gap-1 flex-wrap">
                 <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded text-[9px] uppercase font-bold tracking-wider border ${consonanceBadgeStyle}`}
+                  className={`inline-flex items-center px-1.5 py-0.5 rounded text-[8.5px] uppercase font-bold tracking-wider border ${consonanceBadgeStyle}`}
                 >
                   {interval ? interval.consonance : "standby"}
                 </span>
 
                 {/* Compact Inline Active Voice Stack */}
                 {sortedIntervalPitches.length > 0 ? (
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-0.5">
                     {sortedIntervalPitches.slice(0, 4).map((p, idx) => (
                       <span
                         key={`${p}-${idx}`}
-                        className={`px-1 py-0.2 rounded text-[8.5px] font-semibold border ${
+                        className={`px-1 py-0.2 rounded text-[8px] font-semibold border ${
                           idx === 0
                             ? "bg-cyan-500/15 border-cyan-400/40 text-cyan-200"
                             : "bg-slate-900 border-slate-700/70 text-slate-300"
@@ -1916,7 +1913,7 @@ export default function NeonSynthPad() {
                       </span>
                     ))}
                     {sortedIntervalPitches.length > 4 && (
-                      <span className="text-[8.5px] text-slate-500 font-semibold">
+                      <span className="text-[8px] text-slate-500 font-semibold">
                         +{sortedIntervalPitches.length - 4}
                       </span>
                     )}
@@ -1924,7 +1921,7 @@ export default function NeonSynthPad() {
                 ) : (
                   clipboard &&
                   clipboard.length > 0 && (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/25 text-[9px] text-cyan-300 font-semibold">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/25 text-[8.5px] text-cyan-300 font-semibold">
                       CLIP:{clipboard.length}
                     </span>
                   )
@@ -1933,22 +1930,22 @@ export default function NeonSynthPad() {
 
               {/* Harmonic Legend Key with Geometric Consonance Glyphs */}
               <div
-                className="flex items-center justify-between text-[9px] text-slate-400 pt-0.5"
+                className="flex items-center justify-between text-[8.5px] text-slate-400"
                 title="Consonance classification: Diamond = Perfect (1/1, 2/1, 3/2), Circle = Consonant (3rds, 6ths, 4th), Triangle = Mild (2nd, 7th), Dot = Dissonant (Tritone, semitones)"
               >
-                <span className="flex items-center gap-1 text-cyan-300" title="Perfect Consonance: Unison (1/1), Octave (2/1), Perfect 5th (3/2)">
-                  <Diamond size={8} className="fill-current text-cyan-400" />
+                <span className="flex items-center gap-0.5 text-cyan-300" title="Perfect Consonance: Unison (1/1), Octave (2/1), Perfect 5th (3/2)">
+                  <Diamond size={7} className="fill-current text-cyan-400" />
                   Perf
                 </span>
-                <span className="flex items-center gap-1 text-emerald-300" title="Consonant: Major/Minor 3rds & 6ths, Perfect 4th (4/3)">
-                  <Circle size={8} className="fill-current text-emerald-400" />
+                <span className="flex items-center gap-0.5 text-emerald-300" title="Consonant: Major/Minor 3rds & 6ths, Perfect 4th (4/3)">
+                  <Circle size={7} className="fill-current text-emerald-400" />
                   Cons
                 </span>
-                <span className="flex items-center gap-1 text-amber-300" title="Mild Tension: Major 2nd (9/8), Minor 7th (16/9)">
-                  <Triangle size={8} className="fill-current text-amber-400" />
+                <span className="flex items-center gap-0.5 text-amber-300" title="Mild Tension: Major 2nd (9/8), Minor 7th (16/9)">
+                  <Triangle size={7} className="fill-current text-amber-400" />
                   Mild
                 </span>
-                <span className="flex items-center gap-1 text-rose-300" title="Dissonant Tension: Tritone (45/32), Minor 2nd (16/15), Major 7th (15/8)">
+                <span className="flex items-center gap-0.5 text-rose-300" title="Dissonant Tension: Tritone (45/32), Minor 2nd (16/15), Major 7th (15/8)">
                   <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block" />
                   Diss
                 </span>
@@ -1957,196 +1954,189 @@ export default function NeonSynthPad() {
           </div>
 
           {/* Dedicated Sunken CRT Scope Bezel */}
-          <div className="flex-1 hw-well rounded-lg overflow-hidden relative min-h-[128px] ring-1 ring-inset ring-cyan-500/10">
+          <div className="flex-1 hw-well rounded-lg overflow-hidden relative min-h-[112px] ring-1 ring-inset ring-cyan-500/10">
             <HarmonicVisualizer interval={interval} />
           </div>
         </div>
 
-        {/* RIGHT MODULE: Unified Synthesizer & Sequencer Control Rack */}
-        <div className="lg:col-span-7 hw-panel rounded-xl p-3 flex flex-col justify-between gap-2">
-          {/* Top Console Rack Header (matches left panel's HARMONIC READOUT header) */}
-          <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-slate-400 border-b border-slate-800/80 pb-1.5">
-            <span className="flex items-center gap-1.5 font-semibold">
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-              Synthesis &amp; Sequencer Console
-            </span>
-            <span className="text-[9px] text-slate-500 tracking-wider">
-              {viewMode === "pad" ? "SURFACE: HARMONIC PADS" : `SEQUENCER: ${numSteps} STEPS`}
-            </span>
-          </div>
+        {/* RIGHT MODULE: Strictly Aligned 4-Column x 2-Row Hardware Matrix */}
+        <div className="lg:col-span-7 hw-panel rounded-xl p-2.5 flex flex-col justify-between gap-2">
+          {/* ROW 1: Transport & Tempo | Surface Switcher | Pitch Register | Oscillator */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+            {/* Col 1, Row 1: Transport & Master BPM */}
+            <div className="hw-well rounded-lg p-1 flex items-center justify-between gap-1 h-10">
+              <button
+                onClick={() => setIsPlaying(!isPlaying)}
+                aria-label={isPlaying ? "Stop sequence playback" : "Start sequence playback"}
+                className={`h-full px-3 rounded-md flex items-center justify-center gap-1.5 text-[10.5px] font-bold tracking-wider transition-all shrink-0 focus-visible:ring-2 focus-visible:ring-cyan-400 focus:outline-none ${
+                  isPlaying
+                    ? "bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-[0_0_12px_rgba(244,63,94,0.25)]"
+                    : "bg-emerald-500/15 text-emerald-300 border border-emerald-500/35 hover:bg-emerald-500/25"
+                }`}
+              >
+                {isPlaying ? (
+                  <Square size={10} fill="currentColor" />
+                ) : (
+                  <Play size={10} fill="currentColor" />
+                )}
+                <span>{isPlaying ? "STOP" : "PLAY"}</span>
+              </button>
 
-          {/* Upper Control Strip: Transport, Mode, Pitch Register, Waveform */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            {/* Transport, Master Tempo & View Mode */}
-            <div className="flex items-center gap-2">
-              <div className="hw-well rounded-lg p-0.5 flex items-center h-8">
-                <button
-                  onClick={() => setIsPlaying(!isPlaying)}
-                  aria-label={isPlaying ? "Stop sequence playback" : "Start sequence playback"}
-                  className={`h-full px-3 rounded-md flex items-center gap-1.5 text-[11px] font-bold tracking-wider transition-all focus-visible:ring-2 focus-visible:ring-cyan-400 focus:outline-none ${
-                    isPlaying
-                      ? "bg-rose-500/20 text-rose-300 border border-rose-500/40 shadow-[0_0_12px_rgba(244,63,94,0.25)]"
-                      : "bg-emerald-500/15 text-emerald-300 border border-emerald-500/35 hover:bg-emerald-500/25"
-                  }`}
-                >
-                  {isPlaying ? (
-                    <Square size={11} fill="currentColor" />
-                  ) : (
-                    <Play size={11} fill="currentColor" />
-                  )}
-                  {isPlaying ? "STOP" : "PLAY"}
-                </button>
-              </div>
+              <div className="w-[1px] h-5 bg-slate-800 shrink-0" />
 
-              {/* Master Tempo / BPM Widget */}
               <div
                 onMouseDown={startNumericDrag(bpm, setBpm, 40, 240, 5)}
                 onWheel={e => {
                   if (e.deltaY < 0) setBpm(prev => Math.min(240, prev + 1));
                   else setBpm(prev => Math.max(40, prev - 1));
                 }}
-                className="hw-well rounded-lg p-0.5 flex items-center h-8 cursor-ns-resize"
+                className="flex-1 h-full flex items-center justify-between px-1 cursor-ns-resize min-w-0"
                 title="Drag vertically or scroll to adjust BPM"
               >
-                <span className="px-2 text-[9px] uppercase tracking-wider text-slate-500 font-semibold">
+                <span className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold">
                   BPM
                 </span>
-                <button
-                  onClick={() => setBpm(prev => Math.max(40, prev - 1))}
-                  aria-label="Decrease BPM"
-                  className="w-5 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
-                >
-                  -
-                </button>
-                <div
-                  role="spinbutton"
-                  aria-label="Master Tempo in BPM"
-                  aria-valuenow={bpm}
-                  aria-valuemin={40}
-                  aria-valuemax={240}
-                  className="px-1.5 text-xs font-bold text-emerald-400 border-x border-slate-800/90 min-w-[2.3rem] text-center"
-                >
-                  {bpm}
+                <div className="flex items-center">
+                  <button
+                    onClick={() => setBpm(prev => Math.max(40, prev - 1))}
+                    aria-label="Decrease BPM"
+                    className="w-5 h-6 flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
+                  >
+                    -
+                  </button>
+                  <div
+                    role="spinbutton"
+                    aria-label="Master Tempo in BPM"
+                    aria-valuenow={bpm}
+                    aria-valuemin={40}
+                    aria-valuemax={240}
+                    className="px-1 text-xs font-bold text-emerald-400 min-w-[2.1rem] text-center"
+                  >
+                    {bpm}
+                  </div>
+                  <button
+                    onClick={() => setBpm(prev => Math.min(240, prev + 1))}
+                    aria-label="Increase BPM"
+                    className="w-5 h-6 flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
+                  >
+                    +
+                  </button>
                 </div>
-                <button
-                  onClick={() => setBpm(prev => Math.min(240, prev + 1))}
-                  aria-label="Increase BPM"
-                  className="w-5 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
-                >
-                  +
-                </button>
-              </div>
-
-              {/* Segmented Surface Switcher (Pad vs Roll) */}
-              <div className="hw-well rounded-lg p-0.5 flex items-center h-8">
-                <button
-                  onClick={() => setViewMode("pad")}
-                  className={`h-full px-2.5 rounded-md flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider transition-all ${
-                    viewMode === "pad"
-                      ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/40"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                  title="Harmonic Pad View"
-                >
-                  <Activity size={13} />
-                  <span>Pads</span>
-                </button>
-                <button
-                  onClick={() => setViewMode("roll")}
-                  className={`h-full px-2.5 rounded-md flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider transition-all ${
-                    viewMode === "roll"
-                      ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/40"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                  title="Piano Roll Sequencer"
-                >
-                  <LayoutGrid size={13} />
-                  <span>Sequencer</span>
-                </button>
               </div>
             </div>
 
-            {/* Pitch Span & Octave Register */}
-            <div className="flex items-center gap-2">
+            {/* Col 2, Row 1: Surface Switcher (Pads vs Sequencer) */}
+            <div className="hw-well rounded-lg p-1 grid grid-cols-2 gap-1 h-10">
+              <button
+                onClick={() => setViewMode("pad")}
+                className={`h-full rounded-md flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider transition-all ${
+                  viewMode === "pad"
+                    ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/40"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+                title="Harmonic Pad View"
+              >
+                <Activity size={12} />
+                <span>Pads</span>
+              </button>
+              <button
+                onClick={() => setViewMode("roll")}
+                className={`h-full rounded-md flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider transition-all ${
+                  viewMode === "roll"
+                    ? "bg-cyan-500/15 text-cyan-300 border border-cyan-500/40"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+                title="Piano Roll Sequencer"
+              >
+                <LayoutGrid size={12} />
+                <span>Sequencer</span>
+              </button>
+            </div>
+
+            {/* Col 3, Row 1: Pitch Register (Span & Base Octave) */}
+            <div className="hw-well rounded-lg p-1 flex items-center justify-between gap-1 h-10">
               <div
                 onMouseDown={startNumericDrag(numNotes, setNumNotes, 1, 60, 15)}
                 onWheel={e => {
                   if (e.deltaY < 0) setNumNotes(prev => Math.min(60, prev + 1));
                   else setNumNotes(prev => Math.max(1, prev - 1));
                 }}
-                className="hw-well rounded-lg p-0.5 flex items-center h-8 cursor-ns-resize"
+                className="flex-1 h-full flex items-center justify-between px-1 cursor-ns-resize min-w-0"
                 title="Drag vertically or scroll to adjust note span"
               >
-                <span className="px-2 text-[9px] uppercase tracking-wider text-slate-500 font-semibold">
+                <span className="text-[8.5px] uppercase tracking-wider text-slate-500 font-semibold">
                   Span
                 </span>
-                <button
-                  onClick={() => setNumNotes(prev => Math.max(1, prev - 1))}
-                  aria-label="Decrease note span"
-                  className="w-5 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
-                >
-                  -
-                </button>
-                <div
-                  role="spinbutton"
-                  aria-label="Note Span"
-                  aria-valuenow={numNotes}
-                  aria-valuemin={1}
-                  aria-valuemax={60}
-                  className="px-2 text-xs font-bold text-white border-x border-slate-800/90 min-w-[2.1rem] text-center"
-                >
-                  {numNotes}
+                <div className="flex items-center">
+                  <button
+                    onClick={() => setNumNotes(prev => Math.max(1, prev - 1))}
+                    aria-label="Decrease note span"
+                    className="w-4 h-6 flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
+                  >
+                    -
+                  </button>
+                  <div
+                    role="spinbutton"
+                    aria-label="Note Span"
+                    aria-valuenow={numNotes}
+                    aria-valuemin={1}
+                    aria-valuemax={60}
+                    className="px-1 text-xs font-bold text-white min-w-[1.5rem] text-center"
+                  >
+                    {numNotes}
+                  </div>
+                  <button
+                    onClick={() => setNumNotes(prev => Math.min(60, prev + 1))}
+                    aria-label="Increase note span"
+                    className="w-4 h-6 flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
+                  >
+                    +
+                  </button>
                 </div>
-                <button
-                  onClick={() => setNumNotes(prev => Math.min(60, prev + 1))}
-                  aria-label="Increase note span"
-                  className="w-5 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
-                >
-                  +
-                </button>
               </div>
 
-              <div className="hw-well rounded-lg p-0.5 flex items-center h-8">
-                <span className="px-2 text-[9px] uppercase tracking-wider text-slate-500 font-semibold">
+              <div className="w-[1px] h-5 bg-slate-800 shrink-0" />
+
+              <div className="flex-1 h-full flex items-center justify-between px-1 min-w-0">
+                <span className="text-[8.5px] uppercase tracking-wider text-slate-500 font-semibold">
                   Base
                 </span>
-                <button
-                  onClick={() => setOctave(prev => Math.max(1, prev - 1))}
-                  aria-label="Decrease base octave"
-                  className="w-5 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
-                >
-                  -
-                </button>
-                <div
-                  role="spinbutton"
-                  aria-label="Base Octave"
-                  aria-valuenow={octave}
-                  aria-valuemin={1}
-                  aria-valuemax={8}
-                  className="px-2 text-xs font-bold text-cyan-300 border-x border-slate-800/90 min-w-[2.1rem] text-center"
-                >
-                  C{octave}
+                <div className="flex items-center">
+                  <button
+                    onClick={() => setOctave(prev => Math.max(1, prev - 1))}
+                    aria-label="Decrease base octave"
+                    className="w-4 h-6 flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
+                  >
+                    -
+                  </button>
+                  <div
+                    role="spinbutton"
+                    aria-label="Base Octave"
+                    aria-valuenow={octave}
+                    aria-valuemin={1}
+                    aria-valuemax={8}
+                    className="px-1 text-xs font-bold text-cyan-300 min-w-[1.6rem] text-center"
+                  >
+                    C{octave}
+                  </div>
+                  <button
+                    onClick={() => setOctave(prev => Math.min(8, prev + 1))}
+                    aria-label="Increase base octave"
+                    className="w-4 h-6 flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
+                  >
+                    +
+                  </button>
                 </div>
-                <button
-                  onClick={() => setOctave(prev => Math.min(8, prev + 1))}
-                  aria-label="Increase base octave"
-                  className="w-5 h-full flex items-center justify-center hover:bg-white/5 rounded text-xs text-slate-300 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
-                >
-                  +
-                </button>
               </div>
             </div>
 
-            {/* Oscillator Waveform Selector */}
-            <div className="hw-well rounded-lg p-0.5 flex items-center h-8">
-              <span className="px-2 text-[9px] uppercase tracking-wider text-slate-500 font-semibold hidden sm:inline">
-                Osc
-              </span>
+            {/* Col 4, Row 1: Oscillator Waveform Selector */}
+            <div className="hw-well rounded-lg p-1 grid grid-cols-4 gap-0.5 h-10">
               {WAVES.map(t => (
                 <button
                   key={t}
                   onClick={() => setWaveType(t)}
-                  className={`h-full px-2 rounded-md flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider transition-all ${
+                  className={`h-full rounded-md flex items-center justify-center gap-1 text-[9.5px] font-semibold uppercase tracking-wider transition-all ${
                     waveType === t
                       ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-[0_0_10px_rgba(34,211,238,0.2)]"
                       : "text-slate-400 hover:text-slate-200"
@@ -2161,226 +2151,225 @@ export default function NeonSynthPad() {
             </div>
           </div>
 
-          {/* Lower Control Strip: Sequencer Tools, Clipboard, Keybind Config & MIDI I/O */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
-            {/* Sequencer Tools & Clipboard */}
-            <div className="flex items-center gap-2">
-              <div
-                className={`hw-well rounded-lg p-0.5 flex items-center h-8 transition-opacity ${
-                  viewMode === "pad" ? "opacity-35 pointer-events-none" : ""
+          {/* ROW 2: Sequencer Tools | Clipboard | Keybed Config | Preset & MIDI I/O */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2 pt-2 border-t border-slate-800/80">
+            {/* Col 1, Row 2: Sequencer Edit Tools (Aligned directly under Col 1 Transport) */}
+            <div
+              className={`hw-well rounded-lg p-1 flex items-center gap-0.5 h-10 transition-opacity ${
+                viewMode === "pad" ? "opacity-35 pointer-events-none" : ""
+              }`}
+            >
+              <button
+                disabled={viewMode === "pad"}
+                onClick={() => setEditTool("draw")}
+                className={`flex-1 h-full rounded-md flex items-center justify-center gap-1 text-[10px] font-semibold uppercase transition-all ${
+                  editTool === "draw"
+                    ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                    : "text-slate-400 hover:text-white"
                 }`}
+                title="Draw Lead Note"
               >
-                <button
-                  disabled={viewMode === "pad"}
-                  onClick={() => setEditTool("draw")}
-                  className={`h-full px-2.5 rounded-md flex items-center gap-1 text-[10px] font-semibold uppercase transition-all ${
-                    editTool === "draw"
-                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-                      : "text-slate-400 hover:text-white"
-                  }`}
-                  title="Draw Lead Note"
-                >
-                  <Activity size={12} />
-                  <span>Draw</span>
-                </button>
-                <button
-                  disabled={viewMode === "pad"}
-                  onClick={() => setEditTool("chord")}
-                  className={`h-full px-2.5 rounded-md flex items-center gap-1 text-[10px] font-semibold uppercase transition-all ${
-                    editTool === "chord"
-                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                      : "text-slate-400 hover:text-white"
-                  }`}
-                  title="Draw Backing Chord Note"
-                >
-                  <Layers size={12} />
-                  <span>Chord</span>
-                </button>
-                {editTool === "chord" && viewMode === "roll" && (
-                  <div className="flex items-center gap-1 px-1.5 border-l border-slate-800 ml-0.5">
-                    <button
-                      onClick={() => setChordVolumeDb(prev => Math.max(-6, prev - 1))}
-                      aria-label="Decrease chord volume"
-                      className="w-4 h-5 flex items-center justify-center hover:bg-white/10 rounded text-[10px] text-slate-300 focus-visible:ring-1 focus-visible:ring-amber-400 focus:outline-none"
-                    >
-                      -
-                    </button>
-                    <span
-                      role="spinbutton"
-                      aria-label="Chord volume in decibels"
-                      aria-valuenow={chordVolumeDb}
-                      aria-valuemin={-6}
-                      aria-valuemax={-1}
-                      className="text-[10px] font-semibold text-amber-300 min-w-[2.1rem] text-center"
-                    >
-                      {chordVolumeDb}dB
-                    </span>
-                    <button
-                      onClick={() => setChordVolumeDb(prev => Math.min(-1, prev + 1))}
-                      aria-label="Increase chord volume"
-                      className="w-4 h-5 flex items-center justify-center hover:bg-white/10 rounded text-[10px] text-slate-300 focus-visible:ring-1 focus-visible:ring-amber-400 focus:outline-none"
-                    >
-                      +
-                    </button>
-                  </div>
-                )}
-                <button
-                  disabled={viewMode === "pad"}
-                  onClick={() => setEditTool("select")}
-                  aria-label="Marquee Select Tool"
-                  className={`h-full px-2.5 rounded-md flex items-center gap-1 text-[10px] font-semibold uppercase transition-all focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none ${
-                    editTool === "select"
-                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-                      : "text-slate-400 hover:text-white"
-                  }`}
-                  title="Marquee Select Tool"
-                >
-                  <LayoutGrid size={12} />
-                  <span>Select</span>
-                </button>
-              </div>
-
-              <div
-                className={`hw-well rounded-lg p-0.5 flex items-center h-8 transition-opacity ${
-                  viewMode === "pad" ? "opacity-35 pointer-events-none" : ""
+                <Activity size={11} />
+                <span>Draw</span>
+              </button>
+              <button
+                disabled={viewMode === "pad"}
+                onClick={() => setEditTool("chord")}
+                className={`flex-1 h-full rounded-md flex items-center justify-center gap-1 text-[10px] font-semibold uppercase transition-all ${
+                  editTool === "chord"
+                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                    : "text-slate-400 hover:text-white"
                 }`}
+                title="Draw Backing Chord Note"
               >
-                <button
-                  onClick={copySelection}
-                  disabled={selectedKeys.size === 0 || viewMode === "pad"}
-                  aria-label="Copy selected notes (Ctrl+C)"
-                  className={`h-full px-2 rounded flex items-center gap-1 text-[10px] font-semibold transition-colors focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none ${
-                    selectedKeys.size > 0
-                      ? "text-cyan-300 hover:bg-cyan-500/10"
-                      : "text-slate-600"
-                  }`}
-                  title="Copy (Ctrl+C)"
-                >
-                  <Copy size={11} />
-                  <span className="hidden xl:inline">COPY</span>
-                </button>
-                <button
-                  onClick={cutSelection}
-                  disabled={selectedKeys.size === 0 || viewMode === "pad"}
-                  aria-label="Cut selected notes (Ctrl+X)"
-                  className={`h-full px-2 rounded flex items-center gap-1 text-[10px] font-semibold transition-colors focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none ${
-                    selectedKeys.size > 0
-                      ? "text-cyan-300 hover:bg-cyan-500/10"
-                      : "text-slate-600"
-                  }`}
-                  title="Cut (Ctrl+X)"
-                >
-                  <Scissors size={11} />
-                  <span className="hidden xl:inline">CUT</span>
-                </button>
-                <button
-                  onClick={() => pasteSelection(false)}
-                  disabled={!clipboard || viewMode === "pad"}
-                  aria-label="Paste notes (Ctrl+V)"
-                  className={`h-full px-2 rounded flex items-center gap-1 text-[10px] font-semibold transition-colors focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none ${
-                    clipboard ? "text-emerald-300 hover:bg-emerald-500/10" : "text-slate-600"
-                  }`}
-                  title="Paste (Ctrl+V)"
-                >
-                  <ClipboardPaste size={11} />
-                  <span className="hidden xl:inline">PASTE</span>
-                </button>
-                <div className="w-[1px] h-4 bg-slate-800 mx-0.5" />
-                <button
-                  onClick={deleteSelectedNotes}
-                  disabled={selectedKeys.size === 0 || viewMode === "pad"}
-                  aria-label="Delete selected notes (Delete)"
-                  className={`h-full px-2 rounded flex items-center gap-1 text-[10px] font-semibold transition-colors focus-visible:ring-1 focus-visible:ring-rose-400 focus:outline-none ${
-                    selectedKeys.size > 0 ? "text-rose-400 hover:bg-rose-500/10" : "text-slate-600"
-                  }`}
-                  title="Delete Selected (Del)"
-                >
-                  <Trash2 size={11} />
-                </button>
-              </div>
+                <Layers size={11} />
+                <span>Chord</span>
+              </button>
+              {editTool === "chord" && viewMode === "roll" && (
+                <div className="flex items-center gap-0.5 px-1 border-x border-slate-800 shrink-0">
+                  <button
+                    onClick={() => setChordVolumeDb(prev => Math.max(-6, prev - 1))}
+                    aria-label="Decrease chord volume"
+                    className="w-3.5 h-5 flex items-center justify-center hover:bg-white/10 rounded text-[10px] text-slate-300 focus-visible:ring-1 focus-visible:ring-amber-400 focus:outline-none"
+                  >
+                    -
+                  </button>
+                  <span
+                    role="spinbutton"
+                    aria-label="Chord volume in decibels"
+                    aria-valuenow={chordVolumeDb}
+                    aria-valuemin={-6}
+                    aria-valuemax={-1}
+                    className="text-[9px] font-semibold text-amber-300 min-w-[1.8rem] text-center"
+                  >
+                    {chordVolumeDb}dB
+                  </span>
+                  <button
+                    onClick={() => setChordVolumeDb(prev => Math.min(-1, prev + 1))}
+                    aria-label="Increase chord volume"
+                    className="w-3.5 h-5 flex items-center justify-center hover:bg-white/10 rounded text-[10px] text-slate-300 focus-visible:ring-1 focus-visible:ring-amber-400 focus:outline-none"
+                  >
+                    +
+                  </button>
+                </div>
+              )}
+              <button
+                disabled={viewMode === "pad"}
+                onClick={() => setEditTool("select")}
+                aria-label="Marquee Select Tool"
+                className={`flex-1 h-full rounded-md flex items-center justify-center gap-1 text-[10px] font-semibold uppercase transition-all focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none ${
+                  editTool === "select"
+                    ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                    : "text-slate-400 hover:text-white"
+                }`}
+                title="Marquee Select Tool"
+              >
+                <LayoutGrid size={11} />
+                <span>Select</span>
+              </button>
             </div>
 
-            {/* Pad Config, Preset I/O & MIDI Status */}
-            <div className="flex items-center gap-2">
-              <div className="hw-well rounded-lg p-0.5 flex items-center h-8">
-                <button
-                  onClick={() => setHideDisabled(!hideDisabled)}
-                  aria-label={hideDisabled ? "Show disabled pads" : "Hide disabled pads"}
-                  className={`h-full px-2.5 rounded-md flex items-center gap-1 text-[10px] font-semibold uppercase transition-all focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none ${
-                    hideDisabled
-                      ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                  title={hideDisabled ? "Show Disabled Pads" : "Hide Disabled Pads"}
-                >
-                  {hideDisabled ? <EyeOff size={12} /> : <Eye size={12} />}
-                  <span className="hidden sm:inline">{hideDisabled ? "Hidden" : "Filter"}</span>
-                </button>
-                <button
-                  disabled={viewMode === "roll"}
-                  onClick={() => {
-                    setEditMode(!editMode);
-                    setBindingIndex(null);
-                  }}
-                  aria-label={
-                    editMode ? "Exit key binding mode" : "Configure key bindings and mute pads"
-                  }
-                  className={`h-full px-2.5 rounded-md flex items-center gap-1 text-[10px] font-semibold uppercase transition-all focus-visible:ring-1 focus-visible:ring-amber-400 focus:outline-none ${
-                    viewMode === "roll"
-                      ? "opacity-30 cursor-not-allowed text-slate-600"
-                      : editMode
-                      ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                      : "text-slate-400 hover:text-slate-200"
-                  }`}
-                  title="Configure Key Bindings & Mute Pads"
-                >
-                  <Settings2 size={12} />
-                  <span className="hidden sm:inline">Keys</span>
-                </button>
-              </div>
-
-              <div className="hw-well rounded-lg p-0.5 flex items-center h-8">
-                <button
-                  onClick={exportSequence}
-                  aria-label="Export sequence to JSON file"
-                  className="h-full px-2 hover:bg-white/5 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200 flex items-center gap-1 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
-                  title="Export JSON Sequence"
-                >
-                  <Download size={11} />
-                  <span>EXP</span>
-                </button>
-                <div className="w-[1px] h-4 bg-slate-800" />
-                <label
-                  aria-label="Import sequence from JSON file"
-                  className="h-full px-2 hover:bg-white/5 rounded text-[10px] font-semibold text-slate-400 hover:text-slate-200 flex items-center gap-1 cursor-pointer focus-within:ring-1 focus-within:ring-cyan-400"
-                  title="Import JSON Sequence"
-                >
-                  <Upload size={11} />
-                  <span>IMP</span>
-                  <input type="file" accept=".json" onChange={importSequence} className="hidden" />
-                </label>
-              </div>
-
-              <div
-                className={`hw-well rounded-lg px-2.5 h-8 flex items-center gap-1.5 border ${
-                  midiStatus === "connected"
-                    ? "border-cyan-500/40 bg-cyan-950/20"
-                    : "border-slate-800/80"
+            {/* Col 2, Row 2: Clipboard Actions (Aligned directly under Col 2 Surface Switcher) */}
+            <div
+              className={`hw-well rounded-lg p-1 flex items-center justify-between gap-0.5 h-10 transition-opacity ${
+                viewMode === "pad" ? "opacity-35 pointer-events-none" : ""
+              }`}
+            >
+              <button
+                onClick={copySelection}
+                disabled={selectedKeys.size === 0 || viewMode === "pad"}
+                aria-label="Copy selected notes (Ctrl+C)"
+                className={`flex-1 h-full rounded flex items-center justify-center gap-1 text-[9.5px] font-semibold transition-colors focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none ${
+                  selectedKeys.size > 0
+                    ? "text-cyan-300 hover:bg-cyan-500/10"
+                    : "text-slate-600"
                 }`}
+                title="Copy (Ctrl+C)"
+              >
+                <Copy size={11} />
+                <span>COPY</span>
+              </button>
+              <button
+                onClick={cutSelection}
+                disabled={selectedKeys.size === 0 || viewMode === "pad"}
+                aria-label="Cut selected notes (Ctrl+X)"
+                className={`flex-1 h-full rounded flex items-center justify-center gap-1 text-[9.5px] font-semibold transition-colors focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none ${
+                  selectedKeys.size > 0
+                    ? "text-cyan-300 hover:bg-cyan-500/10"
+                    : "text-slate-600"
+                }`}
+                title="Cut (Ctrl+X)"
+              >
+                <Scissors size={11} />
+                <span>CUT</span>
+              </button>
+              <button
+                onClick={() => pasteSelection(false)}
+                disabled={!clipboard || viewMode === "pad"}
+                aria-label="Paste notes (Ctrl+V)"
+                className={`flex-1 h-full rounded flex items-center justify-center gap-1 text-[9.5px] font-semibold transition-colors focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none ${
+                  clipboard ? "text-emerald-300 hover:bg-emerald-500/10" : "text-slate-600"
+                }`}
+                title="Paste (Ctrl+V)"
+              >
+                <ClipboardPaste size={11} />
+                <span>PASTE</span>
+              </button>
+              <div className="w-[1px] h-5 bg-slate-800 shrink-0" />
+              <button
+                onClick={deleteSelectedNotes}
+                disabled={selectedKeys.size === 0 || viewMode === "pad"}
+                aria-label="Delete selected notes (Delete)"
+                className={`w-8 h-full rounded flex items-center justify-center text-[10px] font-semibold transition-colors shrink-0 focus-visible:ring-1 focus-visible:ring-rose-400 focus:outline-none ${
+                  selectedKeys.size > 0 ? "text-rose-400 hover:bg-rose-500/10" : "text-slate-600"
+                }`}
+                title="Delete Selected (Del)"
+              >
+                <Trash2 size={11} />
+              </button>
+            </div>
+
+            {/* Col 3, Row 2: Keybed Filter & Keymap Config (Aligned directly under Col 3 Span/Base) */}
+            <div className="hw-well rounded-lg p-1 grid grid-cols-2 gap-1 h-10">
+              <button
+                onClick={() => setHideDisabled(!hideDisabled)}
+                aria-label={hideDisabled ? "Show disabled pads" : "Hide disabled pads"}
+                className={`h-full rounded-md flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase transition-all focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none ${
+                  hideDisabled
+                    ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+                title={hideDisabled ? "Show Disabled Pads" : "Hide Disabled Pads"}
+              >
+                {hideDisabled ? <EyeOff size={12} /> : <Eye size={12} />}
+                <span>{hideDisabled ? "Hidden" : "Filter"}</span>
+              </button>
+              <button
+                disabled={viewMode === "roll"}
+                onClick={() => {
+                  setEditMode(!editMode);
+                  setBindingIndex(null);
+                }}
+                aria-label={
+                  editMode ? "Exit key binding mode" : "Configure key bindings and mute pads"
+                }
+                className={`h-full rounded-md flex items-center justify-center gap-1.5 text-[10px] font-semibold uppercase transition-all focus-visible:ring-1 focus-visible:ring-amber-400 focus:outline-none ${
+                  viewMode === "roll"
+                    ? "opacity-30 cursor-not-allowed text-slate-600"
+                    : editMode
+                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+                title="Configure Key Bindings & Mute Pads"
+              >
+                <Settings2 size={12} />
+                <span>Keys</span>
+              </button>
+            </div>
+
+            {/* Col 4, Row 2: Preset EXP/IMP & MIDI Status (Aligned directly under Col 4 Oscillator) */}
+            <div className="hw-well rounded-lg p-1 flex items-center justify-between gap-1 h-10">
+              <button
+                onClick={exportSequence}
+                aria-label="Export sequence to JSON file"
+                className="h-full px-2 hover:bg-white/5 rounded text-[9.5px] font-semibold text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1 shrink-0 focus-visible:ring-1 focus-visible:ring-cyan-400 focus:outline-none"
+                title="Export JSON Sequence"
+              >
+                <Download size={11} />
+                <span>EXP</span>
+              </button>
+              <div className="w-[1px] h-5 bg-slate-800 shrink-0" />
+              <label
+                aria-label="Import sequence from JSON file"
+                className="h-full px-2 hover:bg-white/5 rounded text-[9.5px] font-semibold text-slate-400 hover:text-slate-200 flex items-center justify-center gap-1 cursor-pointer shrink-0 focus-within:ring-1 focus-within:ring-cyan-400"
+                title="Import JSON Sequence"
+              >
+                <Upload size={11} />
+                <span>IMP</span>
+                <input type="file" accept=".json" onChange={importSequence} className="hidden" />
+              </label>
+              <div className="w-[1px] h-5 bg-slate-800 shrink-0" />
+              <div
+                className={`flex-1 h-full px-1.5 rounded flex items-center justify-center gap-1 min-w-0 ${
+                  midiStatus === "connected" ? "bg-cyan-950/30" : ""
+                }`}
+                title={`MIDI Status: ${midiStatus}`}
               >
                 <Radio
-                  size={11}
-                  className={midiStatus === "connected" ? "text-cyan-400" : "text-slate-600"}
+                  size={10}
+                  className={`shrink-0 ${
+                    midiStatus === "connected" ? "text-cyan-400" : "text-slate-600"
+                  }`}
                 />
                 <span
-                  className={`w-1.5 h-1.5 rounded-full ${
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                     midiStatus === "connected"
                       ? "bg-cyan-400 shadow-[0_0_8px_#22d3ee]"
                       : "bg-slate-600"
                   }`}
                 />
-                <span className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">
-                  MIDI:{midiStatus}
+                <span className="text-[8.5px] font-semibold uppercase tracking-wider text-slate-400 truncate">
+                  {midiStatus === "connected" ? "MIDI:ON" : `MIDI:${midiStatus.slice(0, 4)}`}
                 </span>
               </div>
             </div>
@@ -2651,7 +2640,7 @@ export default function NeonSynthPad() {
 
                       {renderShape()}
 
-                      {/* Bottom Note & Sculpted Keycap Legend (Pure Tailwind Utilities) */}
+                      {/* Bottom Note & Sculpted Keycap Legend */}
                       <div className="absolute bottom-0 inset-x-0 pt-2 pb-2.5 bg-gradient-to-t from-black/45 via-black/20 to-transparent border-t border-white/[0.04] flex flex-col items-center pointer-events-none z-10 px-1 gap-1.5">
                         <span
                           className={`text-xs font-bold tracking-tight transition-colors ${

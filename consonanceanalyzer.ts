@@ -608,7 +608,7 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
           ? `Harmonic scope: ${interval.name}, ${interval.consonance} consonance, ${interval.percentage}`
           : "Harmonic oscilloscope vector scope idle"
       }
-      className="w-full h-full block"
+      className="absolute inset-0 w-full h-full block"
     />
   );
 };

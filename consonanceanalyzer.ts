@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Info, Settings2, Eye, EyeOff, Circle, Triangle, Diamond, LayoutGrid, Activity, Layers } from "lucide-react";
-import { consonanceBucket, noteVsSetBucket, detectChord, describeInterval, BUCKET_TEXT, bucketOf, setTension, noteName, Bucket } from "./theory";
+import { consonanceBucket, noteVsSetBucket, detectChord, describeInterval, BUCKET_TEXT, bucketOf, setTension, noteName, Bucket, JUST } from "./theory";
 
 type Snap = { seq: Set<string>; chord: Set<string> };
 const WAVES: OscillatorType[] = ["sine", "triangle", "sawtooth", "square"];
@@ -62,12 +62,94 @@ export type IntervalInfo = {
   bucket: Bucket;
 };
 
+const JUST_RATIOS = JUST;
+
+const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : Math.abs(a));
+const lcm = (a: number, b: number): number => (a === 0 || b === 0 ? 0 : Math.abs((a * b) / gcd(a, b)));
+
+const getDeltaFreq = (semitones: number) => {
+  const octs = Math.floor(semitones / 12);
+  const r = ((semitones % 12) + 12) % 12;
+  const [num, den] = JUST_RATIOS[r];
+  return (num / den) * Math.pow(2, octs) - 1;
+};
+
+const getDeltaFractionLabel = (semitones: number) => {
+  if (semitones === 0) return "+0";
+  const octs = Math.floor(semitones / 12);
+  const r = ((semitones % 12) + 12) % 12;
+  const [num, den] = JUST_RATIOS[r];
+  const netNum = num * Math.pow(2, octs) - den;
+  const g = gcd(netNum, den);
+  const redNum = netNum / g;
+  const redDen = den / g;
+  if (redDen === 1) return `+${redNum}`;
+  if (redNum === 1 && redDen === 2) return "+½";
+  if (redNum === 1 && redDen === 4) return "+¼";
+  if (redNum === 3 && redDen === 4) return "+¾";
+  if (redNum === 1 && redDen === 3) return "+⅓";
+  if (redNum === 2 && redDen === 3) return "+⅔";
+  if (redNum === 1 && redDen === 5) return "+⅕";
+  if (redNum === 2 && redDen === 5) return "+⅖";
+  if (redNum === 3 && redDen === 5) return "+⅗";
+  if (redNum === 4 && redDen === 5) return "+⅘";
+  if (redNum === 1 && redDen === 8) return "+⅛";
+  if (redNum === 7 && redDen === 8) return "+⅞";
+  return `+${(netNum / den).toFixed(2)}`;
+};
+
+const computeOrbitPeriod = (pitches: number[]) => {
+  const bass = Math.min(...pitches);
+  let overallLcm = 1;
+  for (const p of pitches) {
+    const semis = p - bass;
+    if (semis === 0) continue;
+    const r = ((semis % 12) + 12) % 12;
+    const [num, den] = JUST_RATIOS[r];
+    const octs = Math.floor(semis / 12);
+    const netNum = num * Math.pow(2, octs) - den;
+    const g = gcd(netNum, den);
+    const redDen = den / g;
+    overallLcm = lcm(overallLcm, redDen);
+  }
+  const cappedLcm = Math.min(overallLcm, 30);
+  return cappedLcm * 2 * Math.PI;
+};
+
 export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo }> = ({ interval }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animIdRef = useRef<number | null>(null);
   const phaseRef = useRef<number>(0);
   const trailRef = useRef<{ x: number; y: number }[]>([]);
   const lastKeyRef = useRef<string>("");
+
+  // Precompute bass-demodulated closed resonance manifold orbit
+  const orbitPoints = React.useMemo(() => {
+    if (interval.type !== "chord" || interval.pitches.length < 3) return [];
+    const pitches = [...interval.pitches].sort((a, b) => a - b);
+    const N = pitches.length;
+    const bass = pitches[0];
+    const deltas = pitches.map(p => getDeltaFreq(p - bass));
+    const period = computeOrbitPeriod(pitches);
+    const steps = 600;
+    const pts: { x: number; y: number }[] = [];
+
+    for (let i = 0; i <= steps; i++) {
+      const tau = (i / steps) * period;
+      let re = 0;
+      let im = 0;
+      for (let k = 0; k < N; k++) {
+        const angle = deltas[k] * tau;
+        re += Math.cos(angle);
+        im += Math.sin(angle);
+      }
+      pts.push({
+        x: re / N,
+        y: im / N,
+      });
+    }
+    return pts;
+  }, [interval]);
 
   useEffect(() => {
     const key = `${interval.type}-${interval.pitches.join(",")}`;
@@ -231,85 +313,126 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo }> = ({ inter
         ctx.textAlign = "left";
 
       } else {
-        // --- VECTOR SUPERPOSITION PREVIEW (3+ NOTES) ---
+        // --- BASS-DEMODULATED VECTOR SUPERPOSITION PREVIEW (3+ NOTES) ---
+        // Formula: Z_rel(t) = e^{-iω₀t} Z(t) = (1/N) * ∑_{k=1}^N e^{i(ω_k - ω₀)t}
         const pitches = [...interval.pitches].sort((x, y) => x - y);
-        const K = pitches.length;
+        const N = pitches.length;
         const bass = pitches[0];
 
-        // Angular velocities based on pitch offsets from bass
-        const baseSpeed = 1.4; // rad / sec
-        phaseRef.current = (phaseRef.current + baseSpeed * dt) % (Math.PI * 100);
+        // Frame center and unit circle scale
+        const cx = 106;
+        const cy = 68;
+        const R = 46; // Radius corresponding to |Z_rel| = 1.0 (full constructive interference)
+        const armLength = R / N; // Normalized (1/N) arm length per voice
+
+        // Relative difference frequencies: Δω_k = (ω_k - ω₀) / ω₀
+        const deltaFreqs = pitches.map(p => getDeltaFreq(p - bass));
+
+        // Time evolution in demodulated frame
+        const animSpeed = 1.6; // rad / sec
+        phaseRef.current = (phaseRef.current + animSpeed * dt) % (Math.PI * 200);
         const t = phaseRef.current;
 
-        const maxR = Math.min(width, height) * 0.42;
-        const armLength = maxR / Math.pow(K, 0.62);
-
-        // Compute tip-to-tail joint positions
-        const joints: { x: number; y: number; pitch: number }[] = [{ x: cx, y: cy, pitch: bass }];
-        let currX = cx;
-        let currY = cy;
-
-        for (let i = 0; i < K; i++) {
-          const semitonesFromBass = pitches[i] - bass;
-          const omega = Math.pow(2, semitonesFromBass / 12);
-          const angle = omega * t;
-          currX += armLength * Math.cos(angle);
-          currY -= armLength * Math.sin(angle);
-          joints.push({ x: currX, y: currY, pitch: pitches[i] });
-        }
-
-        const tip = joints[joints.length - 1];
-
-        // Record trail of the resultant tip
-        const trail = trailRef.current;
-        trail.push({ x: tip.x, y: tip.y });
-        if (trail.length > 150) trail.shift();
-
-        // 1. Polar reference rings
+        // 1. Draw Unit Reference Circle (|Z| = 1.0) and Phase Axes
         ctx.strokeStyle = "#1e293b";
         ctx.lineWidth = 1;
         ctx.setLineDash([2, 4]);
         ctx.beginPath();
-        ctx.arc(cx, cy, maxR * 0.5, 0, Math.PI * 2);
-        ctx.arc(cx, cy, maxR, 0, Math.PI * 2);
+        ctx.arc(cx, cy, R, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Demodulation Real & Imaginary Axes (Real axis = bass carrier lock)
+        ctx.beginPath();
+        ctx.moveTo(cx - R - 6, cy);
+        ctx.lineTo(cx + R + 6, cy);
+        ctx.moveTo(cx, cy - R - 6);
+        ctx.lineTo(cx, cy + R + 6);
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // 2. Epicycle trajectory trail (fading glowing rosette)
-        if (trail.length > 2) {
-          const numSegs = 4;
-          const segSize = Math.ceil(trail.length / numSegs);
-          for (let s = 0; s < numSegs; s++) {
-            const startIdx = s * segSize;
-            const endIdx = Math.min(trail.length, (s + 1) * segSize);
-            if (startIdx >= trail.length || endIdx <= startIdx) continue;
+        // Reference axis labels
+        ctx.font = "7px monospace";
+        ctx.fillStyle = "#475569";
+        ctx.fillText("|Z|=1", cx + R - 14, cy - 4);
+        ctx.fillText("0", cx - 8, cy - 3);
 
-            const progress = (s + 1) / numSegs;
+        // 2. Draw Complete Resonant Orbit Manifold (Visible at first glance)
+        if (orbitPoints.length > 2) {
+          ctx.beginPath();
+          for (let i = 0; i < orbitPoints.length; i++) {
+            const px = cx + orbitPoints[i].x * R;
+            const py = cy - orbitPoints[i].y * R;
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.closePath();
+
+          // Outer resonant bloom
+          ctx.strokeStyle = mainColor;
+          ctx.lineWidth = 1.8;
+          ctx.globalAlpha = 0.45;
+          ctx.shadowColor = mainColor;
+          ctx.shadowBlur = 8;
+          ctx.stroke();
+
+          // Inner crisp core
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 0.7;
+          ctx.globalAlpha = 0.25;
+          ctx.shadowBlur = 0;
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+
+        // 3. Compute Tip-to-Tail Demodulated Phasor Chain
+        // For bass (k=0): angle is (ω₀ - ω₀)t = 0. Vector is stationary along +X axis.
+        const joints: { x: number; y: number; pitch: number; label: string }[] = [
+          { x: cx, y: cy, pitch: bass, label: "0" }
+        ];
+        let currX = cx;
+        let currY = cy;
+
+        for (let i = 0; i < N; i++) {
+          const angle = deltaFreqs[i] * t;
+          currX += armLength * Math.cos(angle);
+          currY -= armLength * Math.sin(angle);
+          joints.push({
+            x: currX,
+            y: currY,
+            pitch: pitches[i],
+            label: noteName(pitches[i]) + (i === 0 ? " [BASS]" : ` (${getDeltaFractionLabel(pitches[i] - bass)})`)
+          });
+        }
+
+        const tip = joints[joints.length - 1];
+
+        // 4. Moving phosphor comet tail (recent ~40 tip points)
+        const trail = trailRef.current;
+        trail.push({ x: tip.x, y: tip.y });
+        if (trail.length > 40) trail.shift();
+
+        if (trail.length > 1) {
+          for (let i = 1; i < trail.length; i++) {
+            const alpha = (i / trail.length) * 0.9;
             ctx.beginPath();
-            ctx.moveTo(trail[Math.max(0, startIdx - 1)].x, trail[Math.max(0, startIdx - 1)].y);
-            for (let i = startIdx; i < endIdx; i++) {
-              ctx.lineTo(trail[i].x, trail[i].y);
-            }
+            ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
+            ctx.lineTo(trail[i].x, trail[i].y);
             ctx.strokeStyle = mainColor;
-            ctx.globalAlpha = 0.15 + 0.7 * progress;
-            ctx.lineWidth = 1.0 + 0.8 * progress;
-            if (s === numSegs - 1) {
-              ctx.shadowColor = mainColor;
-              ctx.shadowBlur = 8;
-            } else {
-              ctx.shadowBlur = 0;
-            }
+            ctx.globalAlpha = alpha;
+            ctx.lineWidth = 2.0;
+            ctx.shadowColor = mainColor;
+            ctx.shadowBlur = 6;
             ctx.stroke();
           }
           ctx.globalAlpha = 1;
           ctx.shadowBlur = 0;
         }
 
-        // 3. Resultant vector ray from origin to tip
+        // 5. Resultant Vector Ray: Origin (0,0) -> Tip Z_rel(t)
         ctx.strokeStyle = mainColor;
-        ctx.globalAlpha = 0.35;
-        ctx.lineWidth = 1;
-        ctx.setLineDash([2, 2]);
+        ctx.globalAlpha = 0.5;
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([2, 3]);
         ctx.beginPath();
         ctx.moveTo(cx, cy);
         ctx.lineTo(tip.x, tip.y);
@@ -317,26 +440,37 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo }> = ({ inter
         ctx.setLineDash([]);
         ctx.globalAlpha = 1;
 
-        // 4. Phasor chain arms
-        ctx.shadowBlur = 0;
-        ctx.lineWidth = 1.8;
-        ctx.strokeStyle = "#f8fafc";
+        // 6. Draw Phasor Arm Chain
+        // Arm 0 (Bass): Fixed along +X axis from (cx, cy) to (cx + armLength, cy)
+        ctx.strokeStyle = "#38bdf8";
+        ctx.lineWidth = 2.4;
         ctx.beginPath();
         ctx.moveTo(joints[0].x, joints[0].y);
-        for (let i = 1; i < joints.length; i++) {
-          ctx.lineTo(joints[i].x, joints[i].y);
-        }
+        ctx.lineTo(joints[1].x, joints[1].y);
         ctx.stroke();
 
-        // 5. Joint nodes and note labels
+        // Upper arms: (joints[1] -> joints[2] -> ... -> joints[N])
+        if (N > 1) {
+          ctx.strokeStyle = "#f8fafc";
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.moveTo(joints[1].x, joints[1].y);
+          for (let i = 2; i < joints.length; i++) {
+            ctx.lineTo(joints[i].x, joints[i].y);
+          }
+          ctx.stroke();
+        }
+
+        // 7. Draw Joint Nodes & Note Labels
         ctx.font = "8px monospace";
         for (let i = 0; i < joints.length; i++) {
           const j = joints[i];
           const isTip = i === joints.length - 1;
           const isOrigin = i === 0;
+          const isBassAnchor = i === 1;
 
           if (isTip) {
-            // Glowing tip beacon
+            // Glowing tip beacon (Z_rel)
             ctx.shadowColor = mainColor;
             ctx.shadowBlur = 12;
             ctx.fillStyle = "#ffffff";
@@ -347,9 +481,14 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo }> = ({ inter
             ctx.strokeStyle = mainColor;
             ctx.lineWidth = 1.5;
             ctx.beginPath();
-            ctx.arc(j.x, j.y, 6, 0, Math.PI * 2);
+            ctx.arc(j.x, j.y, 6.5, 0, Math.PI * 2);
             ctx.stroke();
             ctx.shadowBlur = 0;
+          } else if (isBassAnchor) {
+            ctx.fillStyle = "#38bdf8";
+            ctx.beginPath();
+            ctx.arc(j.x, j.y, 2.5, 0, Math.PI * 2);
+            ctx.fill();
           } else {
             ctx.fillStyle = isOrigin ? "#64748b" : mainColor;
             ctx.beginPath();
@@ -357,20 +496,32 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo }> = ({ inter
             ctx.fill();
           }
 
-          if (i > 0) {
+          if (i > 0 && !isTip) {
             ctx.fillStyle = "#cbd5e1";
-            ctx.fillText(noteName(j.pitch), j.x + 4, j.y - 3);
+            ctx.fillText(noteName(j.pitch), j.x + 3, j.y - 3);
           }
         }
 
-        // Mode badge & pitch list
+        // 8. Badges, Equation, and Readouts
         ctx.font = "9px monospace";
         ctx.fillStyle = "#38bdf8";
-        ctx.fillText(`SUPERPOSITION [${K} VECTORS]`, 8, 14);
+        ctx.fillText(`DEMODULATED [${N} VOICES]`, 8, 14);
 
+        ctx.fillStyle = "#64748b";
+        ctx.textAlign = "right";
+        ctx.fillText("Z_rel(t) = e^{-iω₀t}·Z(t)", width - 8, 14);
+
+        // Difference frequency breakdown at bottom
+        const deltaStr = pitches.map(p => `${noteName(p)}(${getDeltaFractionLabel(p - bass)})`).join(" ");
+        ctx.fillStyle = "#cbd5e1";
+        ctx.textAlign = "left";
+        ctx.fillText(deltaStr, 8, height - 8);
+
+        // Resultant amplitude: |Z_rel(t)| in [0, 1]
+        const mag = Math.hypot(tip.x - cx, tip.y - cy) / R;
         ctx.fillStyle = "#94a3b8";
         ctx.textAlign = "right";
-        ctx.fillText(pitches.map(p => noteName(p)).join(" "), width - 8, height - 8);
+        ctx.fillText(`|Z_rel|:${mag.toFixed(2)}`, width - 8, height - 8);
         ctx.textAlign = "left";
       }
 

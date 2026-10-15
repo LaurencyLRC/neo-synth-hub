@@ -541,14 +541,15 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
           drawOsdText("|Z|=1", ox + R + 4, oy - 3, "#64748b", "left");
         }
 
-        // 2. Complexity-Normalized 30-Revolution Spirograph Manifold
-        // Attenuate stroke width and alpha inversely with revolution density so 30 loops stay razor-sharp
+        // 2. Closed Resonant Orbit Manifold — Full 3-Pass CRT Phosphor Glow across all 30 revolutions
         if (orbitPoints.length > 2) {
-          const densityScale = 1 / Math.pow(Math.max(1, revolutions), 0.42);
-          const glowWidth = Math.max(1.1, 2.8 * densityScale);
-          const glowAlpha = Math.max(0.06, 0.25 * densityScale);
-          const coreWidth = Math.max(0.65, 1.65 * densityScale);
-          const coreAlpha = Math.max(0.24, 0.82 * densityScale);
+          // Gentle taper so 30-rev orbits keep their neon bloom without fusing into a solid disc
+          const revFactor = Math.min(1, (revolutions - 1) / 29); // 0.0 at 1 rev -> 1.0 at 30 revs
+          const haloWidth = 4.0 - revFactor * 1.8;   // 4.0px -> 2.2px
+          const haloAlpha = 0.36 - revFactor * 0.14; // 0.36  -> 0.22
+          const coreWidth = 2.0 - revFactor * 0.95;  // 2.0px -> 1.05px
+          const coreAlpha = 0.92 - revFactor * 0.22; // 0.92  -> 0.70
+          const blurRadius = 13 - revFactor * 5;     // 13px  -> 8px
 
           ctx.beginPath();
           for (let i = 0; i < orbitPoints.length; i++) {
@@ -559,21 +560,31 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
           }
           ctx.closePath();
 
-          // Soft outer phosphor aura (suppressed on high-density 30-rev chords to prevent blobbing)
-          if (revolutions <= 12) {
-            ctx.shadowColor = mainColor;
-            ctx.shadowBlur = 8;
-          }
+          // Subtle resonant field fill
+          ctx.fillStyle = mainColor;
+          ctx.globalAlpha = 0.05;
+          ctx.fill();
+
+          // Pass 1: Wide outer phosphor bloom (always active)
+          ctx.shadowColor = mainColor;
+          ctx.shadowBlur = blurRadius;
           ctx.strokeStyle = mainColor;
-          ctx.lineWidth = glowWidth;
-          ctx.globalAlpha = glowAlpha;
+          ctx.lineWidth = haloWidth;
+          ctx.globalAlpha = haloAlpha;
           ctx.stroke();
 
-          // Crisp hairline spirograph trace
-          ctx.shadowBlur = 0;
+          // Pass 2: Saturated phosphor core
+          ctx.shadowBlur = blurRadius * 0.6;
           ctx.strokeStyle = mainColor;
           ctx.lineWidth = coreWidth;
           ctx.globalAlpha = coreAlpha;
+          ctx.stroke();
+
+          // Pass 3: Hot white filament highlight
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = Math.max(0.45, coreWidth * 0.38);
+          ctx.globalAlpha = 0.55 - revFactor * 0.2;
           ctx.stroke();
           ctx.globalAlpha = 1;
         }

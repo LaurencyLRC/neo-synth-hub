@@ -502,17 +502,17 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         ctx.lineWidth = 1;
         ctx.globalAlpha = 0.5;
         ctx.beginPath();
-        ctx.moveTo(12, height - 20);
-        ctx.lineTo(width - 12, height - 20);
+        ctx.moveTo(14, height - 24);
+        ctx.lineTo(width - 14, height - 24);
         ctx.stroke();
         ctx.globalAlpha = 1;
 
-        drawOsdText("LISSAJOUS [2V]", 12, 16, "#38bdf8", "left");
-        drawOsdText(interval.ratio || `${a}:${b}`, 12, height - 8, "#64748b", "left");
+        drawOsdText("LISSAJOUS [2V]", 14, 20, "#38bdf8", "left");
+        drawOsdText(interval.ratio || `${a}:${b}`, 14, height - 10, "#64748b", "left");
         drawOsdText(
           `${noteName(p1)} · ${noteName(p2)}`,
-          width - 12,
-          height - 8,
+          width - 14,
+          height - 10,
           "#94a3b8",
           "right"
         );
@@ -706,23 +706,23 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
           }
         }
 
-        // 8. Calibrated HUD Overlays
+        // 8. Calibrated HUD Overlays (12px optical inset padding)
         drawOsdText(
           `DEMODULATED [${N}V · ${revolutions}REV]`,
-          12,
-          16,
+          14,
+          20,
           "#38bdf8",
           "left"
         );
-        drawOsdText("Z_rel(t) = e^{-iω₀t}·Z(t)", width - 12, 16, "#94a3b8", "right");
+        drawOsdText("Z_rel(t) = e^{-iω₀t}·Z(t)", width - 14, 20, "#94a3b8", "right");
 
-        // Calibrated graticule demarcation baseline
+        // Calibrated graticule demarcation baseline aligned with left legend header
         ctx.strokeStyle = "#1e293b";
         ctx.lineWidth = 1;
         ctx.globalAlpha = 0.5;
         ctx.beginPath();
-        ctx.moveTo(12, height - 20);
-        ctx.lineTo(width - 12, height - 20);
+        ctx.moveTo(14, height - 24);
+        ctx.lineTo(width - 14, height - 24);
         ctx.stroke();
         ctx.globalAlpha = 1;
 
@@ -730,18 +730,18 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
           p => `${noteName(p)}(${getDeltaFractionLabel(p - bass)})`
         );
         if (deltaLabels.length <= 4) {
-          drawOsdText(deltaLabels.join(" "), 12, height - 8, "#94a3b8", "left");
+          drawOsdText(deltaLabels.join(" "), 14, height - 10, "#94a3b8", "left");
         } else {
           const mid = Math.ceil(deltaLabels.length / 2);
-          drawOsdText(deltaLabels.slice(0, mid).join(" "), 12, height - 19, "#94a3b8", "left");
-          drawOsdText(deltaLabels.slice(mid).join(" "), 12, height - 8, "#94a3b8", "left");
+          drawOsdText(deltaLabels.slice(0, mid).join(" "), 14, height - 14, "#94a3b8", "left");
+          drawOsdText(deltaLabels.slice(mid).join(" "), 14, height - 6, "#94a3b8", "left");
         }
 
         const mag = Math.hypot(tip.x - ox, tip.y - oy) / R;
         drawOsdText(
           `${revolutions} rev · |Z| ${mag.toFixed(2)}`,
-          width - 12,
-          height - 8,
+          width - 14,
+          height - 10,
           "#94a3b8",
           "right"
         );
@@ -1884,7 +1884,7 @@ export default function NeonSynthPad() {
       <header className="w-full max-w-[1720px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4 shrink-0 z-30">
         {/* LEFT MODULE: Harmonic Readout & Vector Oscilloscope */}
         <div className="hw-panel rounded-2xl p-4 flex items-stretch gap-4 relative overflow-hidden">
-          <div className="flex flex-col justify-between w-56 shrink-0">
+          <div className="flex flex-col justify-between w-56 shrink-0 h-full">
             {/* Top Group: Note / Chord Identity */}
             <div className="flex flex-col">
               {interval ? (
@@ -1958,9 +1958,9 @@ export default function NeonSynthPad() {
             </div>
 
             {/* Bottom Group: Harmonic Legend Key with Geometric Consonance Glyphs */}
-            <div className="pt-2 border-t border-slate-800/80">
+            <div className="h-6 border-t border-slate-800/80 flex items-center">
               <div
-                className="grid grid-cols-4 gap-1 text-[9px] text-slate-400"
+                className="grid grid-cols-4 gap-1 text-[9px] leading-none text-slate-400 w-full"
                 title="Consonance classification: Diamond = Perfect (1/1, 2/1, 3/2), Circle = Consonant (3rds, 6ths, 4th), Triangle = Mild (2nd, 7th), Dot = Dissonant (Tritone, semitones)"
               >
                 <span className="flex items-center gap-1 text-cyan-300">
@@ -1990,9 +1990,9 @@ export default function NeonSynthPad() {
         </div>
 
         {/* RIGHT MODULE: Physical Hardware Control Matrix */}
-        <div className="hw-panel rounded-2xl p-4 flex flex-col justify-between gap-3 overflow-hidden">
+        <div className="hw-panel rounded-2xl p-4 flex flex-col justify-between h-full gap-3 overflow-hidden">
           {/* UPPER DECK: Prominent Transport Key | 3 Rotary Arc Encoders | 4 Graphic Waveform Tiles */}
-          <div className="flex items-stretch gap-2.5 w-full h-[76px]">
+          <div className="flex items-stretch gap-2.5 w-full h-[86px]">
             {/* 1. Prominent Hardware Transport Key */}
             <button
               onClick={() => setIsPlaying(!isPlaying)}
@@ -2031,7 +2031,7 @@ export default function NeonSynthPad() {
                 title="Drag vertically or scroll to adjust BPM"
               >
                 <ArcDial value={bpm} min={40} max={240} color="#10b981" />
-                <div className="flex flex-col justify-between h-[48px] py-0.5">
+                <div className="flex flex-col justify-between h-[52px] py-0.5">
                   <span className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold leading-none">
                     BPM
                   </span>
@@ -2075,7 +2075,7 @@ export default function NeonSynthPad() {
                 title="Drag vertically or scroll to adjust note span"
               >
                 <ArcDial value={numNotes} min={1} max={60} color="#e2e8f0" />
-                <div className="flex flex-col justify-between h-[48px] py-0.5">
+                <div className="flex flex-col justify-between h-[52px] py-0.5">
                   <span className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold leading-none">
                     Span
                   </span>
@@ -2119,7 +2119,7 @@ export default function NeonSynthPad() {
                 title="Drag vertically or scroll to adjust base octave"
               >
                 <ArcDial value={octave} min={1} max={8} color="#22d3ee" />
-                <div className="flex flex-col justify-between h-[48px] py-0.5">
+                <div className="flex flex-col justify-between h-[52px] py-0.5">
                   <span className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold leading-none">
                     Base
                   </span>
@@ -2189,7 +2189,7 @@ export default function NeonSynthPad() {
           </div>
 
           {/* LOWER DECK: Low-Profile Contextual Utility Strip — Flush Right Alignment */}
-          <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-slate-800/80 text-[10px] w-full flex-nowrap">
+          <div className="flex items-center justify-between gap-2 pt-3 pb-1 border-t border-slate-800/80 text-[10px] w-full flex-nowrap">
             {/* Left Controls: Surface Switcher + Keybed / Roll Utilities */}
             <div className="flex items-center gap-2 flex-nowrap shrink min-w-0">
               {/* Mechanical Surface Tab Switcher */}
@@ -2498,7 +2498,11 @@ export default function NeonSynthPad() {
                   return (
                     <div className={containerClass}>
                       {activeReticle}
-                      <Triangle {...iconProps} className={`${iconProps.className} text-amber-400`} />
+                      <Triangle
+                        {...iconProps}
+                        className={`${iconProps.className} text-amber-400`}
+                        style={{ ...iconProps.style, transform: "translateY(-1.5px)" }}
+                      />
                     </div>
                   );
                 case "dissonant":
@@ -2654,7 +2658,7 @@ export default function NeonSynthPad() {
                 {renderShape()}
 
                 {/* Bottom Note & Sculpted Keycap Legend */}
-                <div className="absolute bottom-0 inset-x-0 pt-2 pb-2.5 bg-gradient-to-t from-black/50 via-black/25 to-transparent border-t border-white/[0.04] flex flex-col items-center pointer-events-none z-10 px-1 gap-1.5">
+                <div className="absolute bottom-0 inset-x-0 pt-1.5 pb-3.5 bg-gradient-to-t from-black/50 via-black/25 to-transparent border-t border-white/[0.04] flex flex-col items-center pointer-events-none z-10 px-1 gap-1.5">
                   <span
                     className={`text-xs font-bold tracking-tight transition-colors ${
                       isActive

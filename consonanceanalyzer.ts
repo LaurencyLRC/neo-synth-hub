@@ -70,7 +70,6 @@ const DEFAULT_KEYS_EXTENDED = [
   "i", "8", "o", "9", "p", "0", "[", "-", "]", "=", "\\", "enter",
 ];
 
-// Strip redundant note listing after "Unknown:" since active voice pills are displayed below
 const getChordName = (idx: number[]) =>
   detectChord(idx).name.replace(/^Unknown\s*:.*$/i, "Unknown");
 
@@ -111,28 +110,11 @@ const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : Math.abs(a));
 const lcm = (a: number, b: number): number =>
   a === 0 || b === 0 ? 0 : Math.abs((a * b) / gcd(a, b));
 
-// Pure Just Intonation relative frequency delta: (num/den)*2^oct - 1
-const getDeltaFreqJust = (semitones: number) => {
+const getDeltaFreq = (semitones: number) => {
   const octs = Math.floor(semitones / 12);
   const r = ((semitones % 12) + 12) % 12;
   const [num, den] = JUST_RATIOS[r];
   return (num / den) * Math.pow(2, octs) - 1;
-};
-
-// True 12-TET relative frequency delta: 2^(semitones/12) - 1
-const getDeltaFreq12TET = (semitones: number) => {
-  if (semitones === 0) return 0;
-  return Math.pow(2, semitones / 12) - 1;
-};
-
-// Signed 12-TET vs. Just Intonation deviation in cents
-const getCentsDrift = (semitones: number) => {
-  if (semitones === 0) return 0;
-  const r = ((semitones % 12) + 12) % 12;
-  if (r === 0) return 0;
-  const [num, den] = JUST_RATIOS[r];
-  const justCents = 1200 * Math.log2(num / den);
-  return r * 100 - justCents;
 };
 
 const getDeltaFractionLabel = (semitones: number) => {
@@ -227,44 +209,34 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
   const orbitData = React.useMemo(() => {
     if (!interval || interval.type !== "chord" || interval.pitches.length < 3) {
       return {
-        justPts: [] as { x: number; y: number }[],
+        pts: [] as { x: number; y: number }[],
         minX: -1,
         maxX: 1,
         minY: -1,
         maxY: 1,
         revolutions: 1,
-        traceRevolutions: 1,
-        maxDriftCents: 0,
       };
     }
     const pitches = [...interval.pitches].sort((a, b) => a - b);
     const N = pitches.length;
     const bass = pitches[0];
-    const justDeltas = pitches.map(p => getDeltaFreqJust(p - bass));
-    const tetDeltas = pitches.map(p => getDeltaFreq12TET(p - bass));
-    const maxDriftCents = Math.max(...pitches.map(p => Math.abs(getCentsDrift(p - bass))));
-
+    const deltas = pitches.map(p => getDeltaFreq(p - bass));
     const revolutions = computeOrbitRevolutions(pitches);
-    // Trace multiple fundamental periods on low-revolution chords (e.g. 3x on C-E-G vs C-G-C5)
-    // so 12-TET phase precession fans out into a visible multi-strand ribbon while pure chords stay locked
-    const cyclesToTrace = revolutions <= 2 ? 4 : revolutions <= 6 ? 3 : revolutions <= 12 ? 2 : 1;
-    const traceRevolutions = Math.min(30, revolutions * cyclesToTrace);
-
-    const justPeriod = revolutions * 2 * Math.PI;
-    const justSteps = Math.min(1800, Math.max(480, revolutions * 80));
-    const justPts: { x: number; y: number }[] = [];
+    const period = revolutions * 2 * Math.PI;
+    const steps = Math.min(3000, Math.max(720, revolutions * 96));
+    const pts: { x: number; y: number }[] = [];
 
     let minX = 0;
     let maxX = 0;
     let minY = 0;
     let maxY = 0;
 
-    for (let i = 0; i <= justSteps; i++) {
-      const tau = (i / justSteps) * justPeriod;
+    for (let i = 0; i <= steps; i++) {
+      const tau = (i / steps) * period;
       let re = 0;
       let im = 0;
       for (let k = 0; k < N; k++) {
-        const angle = justDeltas[k] * tau;
+        const angle = deltas[k] * tau;
         re += Math.cos(angle);
         im += Math.sin(angle);
         const jx = re / N;
@@ -274,29 +246,12 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         if (jy < minY) minY = jy;
         if (jy > maxY) maxY = jy;
       }
-      justPts.push({ x: re / N, y: im / N });
+      pts.push({
+        x: re / N,
+        y: im / N,
+      });
     }
-
-    // Expand bounding box over a 12-TET precession sweep so the camera remains rock-steady as the orbit precesses
-    const sweepPeriod = 30 * 2 * Math.PI;
-    for (let i = 0; i <= 900; i++) {
-      const tau = (i / 900) * sweepPeriod;
-      let re = 0;
-      let im = 0;
-      for (let k = 0; k < N; k++) {
-        const angle = tetDeltas[k] * tau;
-        re += Math.cos(angle);
-        im += Math.sin(angle);
-        const jx = re / N;
-        const jy = im / N;
-        if (jx < minX) minX = jx;
-        if (jx > maxX) maxX = jx;
-        if (jy < minY) minY = jy;
-        if (jy > maxY) maxY = jy;
-      }
-    }
-
-    return { justPts, minX, maxX, minY, maxY, revolutions, traceRevolutions, maxDriftCents };
+    return { pts, minX, maxX, minY, maxY, revolutions };
   }, [interval]);
 
   useEffect(() => {
@@ -525,15 +480,7 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         ctx.fill();
         ctx.shadowBlur = 0;
 
-        const dyadDrift = getCentsDrift(diff);
-        const driftSign = dyadDrift >= 0 ? "+" : "";
-        drawOsdText(
-          `LISSAJOUS [${interval.ratio || `${a}:${b}`} · ${driftSign}${dyadDrift.toFixed(1)}¢]`,
-          10,
-          15,
-          "#67e8f9",
-          "left"
-        );
+        drawOsdText(`LISSAJOUS [${interval.ratio || `${a}:${b}`}]`, 10, 15, "#67e8f9", "left");
         drawOsdText(
           `X:${noteName(p1)} · Y:${noteName(p2)}`,
           width - 10,
@@ -542,21 +489,12 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
           "right"
         );
       } else {
-        // --- BASS-DEMODULATED 12-TET PRECESSION & JUST VECTOR SCOPE (3+ NOTES) ---
+        // --- BASS-DEMODULATED VECTOR SUPERPOSITION PREVIEW (3+ NOTES) ---
         const pitches = [...interval.pitches].sort((x, y) => x - y);
         const N = pitches.length;
         const bass = pitches[0];
 
-        const {
-          justPts,
-          minX,
-          maxX,
-          minY,
-          maxY,
-          revolutions,
-          traceRevolutions,
-          maxDriftCents,
-        } = orbitData;
+        const { pts: orbitPoints, minX, maxX, minY, maxY, revolutions } = orbitData;
         const spanX = Math.max(0.75, maxX - minX);
         const spanY = Math.max(0.75, maxY - minY);
 
@@ -568,10 +506,10 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         const oy = cy + ((minY + maxY) / 2) * R;
 
         const armLength = R / N;
-        const tetDeltaFreqs = pitches.map(p => getDeltaFreq12TET(p - bass));
+        const deltaFreqs = pitches.map(p => getDeltaFreq(p - bass));
 
-        const animSpeed = 1.05;
-        phaseRef.current = (phaseRef.current + animSpeed * dt) % (Math.PI * 400);
+        const animSpeed = 1.1;
+        phaseRef.current = (phaseRef.current + animSpeed * dt) % (Math.PI * 200);
         const t = phaseRef.current;
 
         // 1. Calibrated Origin Crosshair & Unit Reference Circle (|Z| = 1.0)
@@ -602,86 +540,60 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
           drawOsdText("|Z|=1", ox + R + 4, oy - 3, "#64748b", "left");
         }
 
-        // 2A. Ideal Just Intonation Blueprint (Dashed Reference Stencil)
-        // Shows the stationary pure-ratio curve so 12-TET phase drift is immediately visible against it
-        if (justPts.length > 2 && maxDriftCents > 3.5) {
+        // 2. Closed Resonant Orbit Manifold — Full 3-Pass CRT Phosphor Glow
+        if (orbitPoints.length > 2) {
+          const revFactor = Math.min(1, (revolutions - 1) / 29);
+          const haloWidth = 4.0 - revFactor * 1.8;
+          const haloAlpha = 0.36 - revFactor * 0.14;
+          const coreWidth = 2.0 - revFactor * 0.95;
+          const coreAlpha = 0.92 - revFactor * 0.22;
+          const blurRadius = 13 - revFactor * 5;
+
           ctx.beginPath();
-          for (let i = 0; i < justPts.length; i++) {
-            const px = ox + justPts[i].x * R;
-            const py = oy - justPts[i].y * R;
+          for (let i = 0; i < orbitPoints.length; i++) {
+            const px = ox + orbitPoints[i].x * R;
+            const py = oy - orbitPoints[i].y * R;
             if (i === 0) ctx.moveTo(px, py);
             else ctx.lineTo(px, py);
           }
           ctx.closePath();
-          ctx.setLineDash([3, 4]);
-          ctx.strokeStyle = "#94a3b8";
-          ctx.lineWidth = 1.1;
-          ctx.globalAlpha = 0.32;
+
+          // Subtle resonant field fill
+          ctx.fillStyle = mainColor;
+          ctx.globalAlpha = 0.05;
+          ctx.fill();
+
+          // Pass 1: Wide outer phosphor bloom
+          ctx.shadowColor = mainColor;
+          ctx.shadowBlur = blurRadius;
+          ctx.strokeStyle = mainColor;
+          ctx.lineWidth = haloWidth;
+          ctx.globalAlpha = haloAlpha;
           ctx.stroke();
-          ctx.setLineDash([]);
+
+          // Pass 2: Saturated phosphor core
+          ctx.shadowBlur = blurRadius * 0.6;
+          ctx.strokeStyle = mainColor;
+          ctx.lineWidth = coreWidth;
+          ctx.globalAlpha = coreAlpha;
+          ctx.stroke();
+
+          // Pass 3: Hot white filament highlight
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = Math.max(0.45, coreWidth * 0.38);
+          ctx.globalAlpha = 0.55 - revFactor * 0.2;
+          ctx.stroke();
           ctx.globalAlpha = 1;
         }
 
-        // 2B. Live 12-TET Precessing Orbit Manifold — Full 3-Pass CRT Phosphor Glow
-        // On a pure power chord (C-G-C5, 1.9¢ drift), all revolutions lock into one razor-sharp cardioid.
-        // On C Major (C-E-G, +13.7¢ drift on E), the revolutions fan out into a live precessing braid!
-        const windowSpan = traceRevolutions * 2 * Math.PI;
-        const halfSpan = windowSpan / 2;
-        const liveSteps = Math.min(2400, Math.max(720, traceRevolutions * 85));
-
-        const revFactor = Math.min(1, (traceRevolutions - 1) / 29);
-        const haloWidth = 4.0 - revFactor * 1.8;
-        const haloAlpha = 0.36 - revFactor * 0.14;
-        const coreWidth = 2.0 - revFactor * 0.95;
-        const coreAlpha = 0.92 - revFactor * 0.22;
-        const blurRadius = 13 - revFactor * 5;
-
-        ctx.beginPath();
-        for (let i = 0; i <= liveSteps; i++) {
-          const tau = t - halfSpan + (i / liveSteps) * windowSpan;
-          let re = 0;
-          let im = 0;
-          for (let k = 0; k < N; k++) {
-            const angle = tetDeltaFreqs[k] * tau;
-            re += Math.cos(angle);
-            im += Math.sin(angle);
-          }
-          const px = ox + (re / N) * R;
-          const py = oy - (im / N) * R;
-          if (i === 0) ctx.moveTo(px, py);
-          else ctx.lineTo(px, py);
-        }
-
-        // Pass 1: Wide outer phosphor bloom
-        ctx.shadowColor = mainColor;
-        ctx.shadowBlur = blurRadius;
-        ctx.strokeStyle = mainColor;
-        ctx.lineWidth = haloWidth;
-        ctx.globalAlpha = haloAlpha;
-        ctx.stroke();
-
-        // Pass 2: Saturated phosphor core
-        ctx.shadowBlur = blurRadius * 0.6;
-        ctx.strokeStyle = mainColor;
-        ctx.lineWidth = coreWidth;
-        ctx.globalAlpha = coreAlpha;
-        ctx.stroke();
-
-        // Pass 3: Hot white filament highlight
-        ctx.shadowBlur = 0;
-        ctx.strokeStyle = "#ffffff";
-        ctx.lineWidth = Math.max(0.45, coreWidth * 0.38);
-        ctx.globalAlpha = 0.55 - revFactor * 0.2;
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-
-        // 3. Tip-to-Tail 12-TET Demodulated Phasor Chain
+        // 3. Tip-to-Tail Demodulated Phasor Chain
         const joints: { x: number; y: number }[] = [{ x: ox, y: oy }];
         let currX = ox;
         let currY = oy;
 
         for (let i = 0; i < N; i++) {
-          const angle = tetDeltaFreqs[i] * t;
+          const angle = deltaFreqs[i] * t;
           currX += armLength * Math.cos(angle);
           currY -= armLength * Math.sin(angle);
           joints.push({ x: currX, y: currY });
@@ -796,30 +708,19 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
           }
         }
 
-        // 8. Side-Wing Telemetry Overlays (with 12-TET Drift Readout)
+        // 8. Clean Side-Wing Telemetry Overlays
         drawOsdText(
-          `12-TET [${N}V · ${revolutions}REV · DRIFT:${maxDriftCents.toFixed(1)}¢]`,
+          `DEMODULATED [${N}V · ${revolutions}REV]`,
           10,
           15,
           "#38bdf8",
           "left"
         );
-        drawOsdText(
-          maxDriftCents > 3.5 ? "DASHED: JUST REF" : "LOCKED TO JUST REF",
-          width - 10,
-          15,
-          "#94a3b8",
-          "right"
-        );
+        drawOsdText("Z_rel(t) = e^{-iω₀t}·Z(t)", width - 10, 15, "#94a3b8", "right");
 
-        // Voice fraction + signed 12-TET cents drift per voice
-        const deltaLabels = pitches.map(p => {
-          const semis = p - bass;
-          const frac = getDeltaFractionLabel(semis);
-          const drift = Math.round(getCentsDrift(semis));
-          const driftStr = drift === 0 ? "" : `,${drift > 0 ? "+" : ""}${drift}¢`;
-          return `${noteName(p)}(${frac}${driftStr})`;
-        });
+        const deltaLabels = pitches.map(
+          p => `${noteName(p)}(${getDeltaFractionLabel(p - bass)})`
+        );
         if (deltaLabels.length <= 4) {
           drawOsdText(deltaLabels.join(" "), 10, height - 8, "#cbd5e1", "left");
         } else {

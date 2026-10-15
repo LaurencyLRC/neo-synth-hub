@@ -17,7 +17,7 @@ describe("detectChord", () => {
   ];
   it.each(corpus)("%s", (_label, pitches, name) => expect(detectChord(pitches).name).toBe(name));
   it("spells with flats on request", () => expect(detectChord([10, 14, 17], { flats: true }).name).toBe("Bb"));
-  it("lists pitch classes instead of 'Cluster'", () => expect(detectChord([0, 1, 2]).name).toMatch(/^Unknown: C C# D/));
+  it("names unrecognized pitch collections 'Unknown'", () => expect(detectChord([0, 1, 2]).name).toBe("Unknown"));
 });
 
 describe("consonance model", () => {

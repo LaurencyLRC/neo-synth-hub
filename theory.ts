@@ -80,7 +80,6 @@ export function setTension(pitches: number[], o: Options = {}) {
 }
 
 const FULL = ["unison", "minor 2nd", "major 2nd", "minor 3rd", "major 3rd", "perfect 4th", "tritone", "perfect 5th", "minor 6th", "major 6th", "minor 7th", "major 7th"];
-const SHORT = ["P1", "m2", "M2", "m3", "M3", "P4", "TT", "P5", "m6", "M6", "m7", "M7"];
 export const JUST: [number, number][] = [[1, 1], [16, 15], [9, 8], [6, 5], [5, 4], [4, 3], [45, 32], [3, 2], [8, 5], [5, 3], [9, 5], [15, 8]];
 const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
 
@@ -134,6 +133,6 @@ export function detectChord(pitches: number[], { flats = false }: { flats?: bool
   if (pcs.length === 1) return { name: nm(bass), root: bass, quality: null, bass, pcs };
   const name = pcs.length === 2
     ? `${nm(pcs[0])}–${nm(pcs[1])} (${FULL[pc(pcs[1] - bass)]})`
-    : `Unknown: ${pcs.map(nm).join(" ")} (${pcs.slice(1).map(p => SHORT[pc(p - bass)]).join(", ")} above bass)`;
+    : "Unknown";
   return { name, root: null as number | null, quality: null as string | null, bass, pcs };
 }

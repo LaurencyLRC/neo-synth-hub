@@ -357,8 +357,8 @@ const WaveGlyph: React.FC<{ type: OscillatorType }> = ({ type }) => (
 );
 
 // The consonance vocabulary, drawn once: diamond = perfect, circle = consonant,
-// triangle = mild, dot = dissonant. Used in the legend, the readout and on pads,
-// so shape and colour always say the same thing.
+// Diamond = perfect, ring = consonant, triangle = mild, dot = dissonant.
+// Used in the legend, the readout and on pads, so shape and colour always say the same thing.
 const ConsonanceGlyph: React.FC<{
   bucket: keyof typeof COLORS;
   size?: number;
@@ -374,7 +374,9 @@ const ConsonanceGlyph: React.FC<{
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" className="shrink-0" aria-hidden="true">
       {bucket === "perfect" && <path d="M12 2.5 21.5 12 12 21.5 2.5 12Z" {...outline} />}
-      {bucket === "consonant" && <circle cx="12" cy="12" r="9" {...outline} />}
+      {bucket === "consonant" && (
+        <circle cx="12" cy="12" r="8.5" fill="none" stroke={color} strokeWidth={2.4} />
+      )}
       {bucket === "slightly" && <path d="M12 2 21.5 18H2.5Z" {...outline} />}
       {bucket === "dissonant" && <circle cx="12" cy="12" r="4.5" fill={color} />}
     </svg>
@@ -815,12 +817,12 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         const deltaLabels = pitches.map(
           p => `${noteName(p)}(${getDeltaFractionLabel(p - bass)})`
         );
-        const twoLine = deltaLabels.length > 4;
+        const twoLine = deltaLabels.length > 4 || (width < 340 && deltaLabels.length > 2);
         const ruleY = height - (twoLine ? 40 : 28);
 
         drawOsdText(`Bass-demodulated, ${N} voices`, 14, 20, INK.t2, "left");
         if (width > 460) {
-          drawOsdText("Z_rel(t) = e^{-iω₀t}·Z(t)", width - 14, 20, INK.t3, "right", true);
+          drawOsdText("Phase orbit, 12-TET", width - 14, 20, INK.t3, "right");
         }
 
         ctx.strokeStyle = INK.axis;
@@ -842,7 +844,7 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         drawOsdText(
           `${revolutions} rev   |Z| ${mag.toFixed(2)}`,
           width - 14,
-          height - 10,
+          height - (twoLine ? 8 : 10),
           INK.t1,
           "right",
           true
@@ -2464,13 +2466,22 @@ export default function NeonSynthPad() {
                     </div>
                   ) : (
                     <span
+                      title={
+                        keyBindings[i]?.length > 1
+                          ? `Alternate key: ${keyBindings[i].slice(1).map(k => k.toUpperCase()).join(", ")}`
+                          : undefined
+                      }
                       className={`keycap ${isDisabled ? "normal-case" : "uppercase"} ${
                         dense ? "!min-w-0 !px-1 !text-[11px]" : ""
                       } ${isActive ? "!border-[#e9eef6] !text-[#e9eef6]" : ""} ${
                         isDisabled ? "!border-transparent !bg-transparent !text-[#7b879b]" : ""
                       }`}
                     >
-                      {isDisabled ? "Off" : keyBindings[i]?.join(" ")}
+                      {isDisabled
+                        ? "Off"
+                        : editMode
+                        ? keyBindings[i]?.join(" ")
+                        : keyBindings[i]?.[0] || ""}
                     </span>
                   )}
                 </div>

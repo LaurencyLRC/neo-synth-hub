@@ -316,7 +316,27 @@ body,
     box-shadow: inset 0 0 0 1px var(--line-2);
   }
 
-  /* Pad: flat surface; colour comes only from the consonance tint */
+  /*
+    Keybed: one continuous grid for every pad, with a ruler row above it.
+    Columns are equal by construction, so an odd note count can never leave
+    a lopsided half. Below md the pads keep a 44px touch width and the bed scrolls.
+  */
+  .keybed {
+    display: grid;
+    flex: 1 1 0;
+    min-width: calc(var(--n) * 44px + (var(--n) - 1) * 6px);
+    column-gap: 6px;
+    row-gap: 8px;
+    grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+    grid-template-rows: 16px minmax(0, 1fr);
+  }
+  @media (min-width: 768px) {
+    .keybed {
+      min-width: 0;
+    }
+  }
+
+  /* Pad: one flat surface for every note; colour comes only from the consonance tint */
   .pad {
     position: relative;
     overflow: hidden;

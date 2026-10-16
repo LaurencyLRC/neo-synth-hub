@@ -357,8 +357,8 @@ const WaveGlyph: React.FC<{ type: OscillatorType }> = ({ type }) => (
 );
 
 // The consonance vocabulary, drawn once: diamond = perfect, circle = consonant,
-// Diamond = perfect, ring = consonant, triangle = mild, dot = dissonant.
-// Used in the legend, the readout and on pads, so shape and colour always say the same thing.
+// triangle = mild, dot = dissonant. Used in the legend, the readout and on pads,
+// so shape and colour always say the same thing.
 const ConsonanceGlyph: React.FC<{
   bucket: keyof typeof COLORS;
   size?: number;
@@ -374,11 +374,11 @@ const ConsonanceGlyph: React.FC<{
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" className="shrink-0" aria-hidden="true">
       {bucket === "perfect" && <path d="M12 2.5 21.5 12 12 21.5 2.5 12Z" {...outline} />}
-      {bucket === "consonant" && (
-        <circle cx="12" cy="12" r="8.5" fill="none" stroke={color} strokeWidth={2.4} />
-      )}
+      {bucket === "consonant" && <circle cx="12" cy="12" r="9" {...outline} />}
       {bucket === "slightly" && <path d="M12 2 21.5 18H2.5Z" {...outline} />}
-      {bucket === "dissonant" && <circle cx="12" cy="12" r="4.5" fill={color} />}
+      {bucket === "dissonant" && (
+        <path d="M5.5 5.5 18.5 18.5M18.5 5.5 5.5 18.5" fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" />
+      )}
     </svg>
   );
 };
@@ -817,12 +817,12 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         const deltaLabels = pitches.map(
           p => `${noteName(p)}(${getDeltaFractionLabel(p - bass)})`
         );
-        const twoLine = deltaLabels.length > 4 || (width < 340 && deltaLabels.length > 2);
+        const twoLine = deltaLabels.length > 4;
         const ruleY = height - (twoLine ? 40 : 28);
 
         drawOsdText(`Bass-demodulated, ${N} voices`, 14, 20, INK.t2, "left");
         if (width > 460) {
-          drawOsdText("Phase orbit, 12-TET", width - 14, 20, INK.t3, "right");
+          drawOsdText("Z_rel(t) = e^{-iω₀t}·Z(t)", width - 14, 20, INK.t3, "right", true);
         }
 
         ctx.strokeStyle = INK.axis;
@@ -844,7 +844,7 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         drawOsdText(
           `${revolutions} rev   |Z| ${mag.toFixed(2)}`,
           width - 14,
-          height - (twoLine ? 8 : 10),
+          height - 10,
           INK.t1,
           "right",
           true
@@ -2331,17 +2331,26 @@ export default function NeonSynthPad() {
           const renderedPads = Array.from({ length: numNotes })
             .map((_, i) => i)
             .filter(i => !hideDisabled || !disabledNotes.has(i));
-          const octaveSplit = Math.ceil(renderedPads.length / 2);
-          const octave1Notes = renderedPads.slice(0, octaveSplit);
-          const octave2Notes = renderedPads.slice(octaveSplit);
-          const dense = octave1Notes.length > 14;
+          // One continuous keybed. Octaves are grouped by each note's own octave
+          // (index / 12), never by a count, so the markers always sit on a C no
+          // matter how many notes are shown or muted.
+          const octaveGroups: { octave: number; start: number; count: number }[] = [];
+          renderedPads.forEach((idx, col) => {
+            const o = Math.floor(idx / 12);
+            const last = octaveGroups[octaveGroups.length - 1];
+            if (last && last.octave === o) last.count += 1;
+            else octaveGroups.push({ octave: o, start: col, count: 1 });
+          });
+          const dense = renderedPads.length > 36;
+          // Naturals start a little lower, so the raised accidentals carry the
+          // piano's 2 + 3 rhythm by shape alone, without a second surface colour.
+          const accidentalDrop = dense ? 14 : 24;
 
-          const renderPad = (i: number) => {
+          const renderPad = (i: number, col: number) => {
             const isDisabled = disabledNotes.has(i);
             const isActive = activeNotes.has(i);
             const noteLabel = getNoteName(i);
             const noteOctave = octave + Math.floor(i / 12);
-            const isRootC = i % 12 === 0;
             const accidental = isAccidental(i);
             const isBinding = bindingIndex === i;
             const activeIndices =
@@ -2358,12 +2367,12 @@ export default function NeonSynthPad() {
             const glyphSize = Math.max(16, Math.min(24, 420 / numNotes));
             const hasRelation = activeIndices.length > 0 && !isDisabled && type !== "neutral";
 
-            const padBg = isDisabled ? "transparent" : accidental ? "#080b11" : "#111721";
+            const padBg = isDisabled ? "transparent" : "#111721";
             const padTint = !hasRelation
               ? "transparent"
               : isActive
-              ? `${displayColor}38`
-              : `${displayColor}12`;
+              ? `${displayColor}3c`
+              : `${displayColor}14`;
             const padRing = isBinding
               ? `inset 0 0 0 2px ${INK.t1}`
               : isActive && !isDisabled
@@ -2422,14 +2431,20 @@ export default function NeonSynthPad() {
                     "--pad-bg": padBg,
                     "--pad-tint": padTint,
                     boxShadow: padRing,
-                    height: "100%",
+                    gridRow: 2,
+                    gridColumn: col + 1,
+                    marginTop: accidental ? 0 : accidentalDrop,
                   } as React.CSSProperties
                 }
-                className={`pad group flex-shrink-0 w-11 md:w-auto md:flex-1 md:min-w-0 h-full focus:z-30 ${
+                className={`pad group min-w-0 focus:z-30 ${
                   isBinding ? "z-20" : ""
                 }`}
               >
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 px-1 pb-3">
+                <div
+                  className={`pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center pb-3 ${
+                    dense ? "gap-1.5 px-0" : "gap-2 px-1"
+                  }`}
+                >
                   <div className="flex h-6 items-center justify-center">
                     {hasRelation && (
                       <ConsonanceGlyph
@@ -2441,12 +2456,11 @@ export default function NeonSynthPad() {
                   </div>
 
                   <span
-                    className={`font-semibold leading-none tracking-tight ${
-                      dense ? "text-xs" : "text-[15px]"
-                    } ${isDisabled ? "text-t3" : accidental && !isActive ? "text-t2" : "text-t1"}`}
+                    className={`font-semibold leading-none ${
+                      dense ? "text-[11px] tracking-[-0.04em]" : "text-[15px] tracking-tight"
+                    } ${isDisabled ? "text-t3" : "text-t1"}`}
                   >
                     {noteLabel}
-                    {isRootC && <span className="font-normal text-t2">{noteOctave}</span>}
                   </span>
 
                   {isBinding ? (
@@ -2466,22 +2480,13 @@ export default function NeonSynthPad() {
                     </div>
                   ) : (
                     <span
-                      title={
-                        keyBindings[i]?.length > 1
-                          ? `Alternate key: ${keyBindings[i].slice(1).map(k => k.toUpperCase()).join(", ")}`
-                          : undefined
-                      }
                       className={`keycap ${isDisabled ? "normal-case" : "uppercase"} ${
-                        dense ? "!min-w-0 !px-1 !text-[11px]" : ""
+                        dense ? "!min-w-0 !border-0 !bg-transparent !px-0 !text-[11px]" : ""
                       } ${isActive ? "!border-[#e9eef6] !text-[#e9eef6]" : ""} ${
                         isDisabled ? "!border-transparent !bg-transparent !text-[#7b879b]" : ""
                       }`}
                     >
-                      {isDisabled
-                        ? "Off"
-                        : editMode
-                        ? keyBindings[i]?.join(" ")
-                        : keyBindings[i]?.[0] || ""}
+                      {isDisabled ? "Off" : keyBindings[i]?.join(" ")}
                     </span>
                   )}
                 </div>
@@ -2508,25 +2513,31 @@ export default function NeonSynthPad() {
                 </div>
               )}
 
-              {/* Two octave bays on the same two-column grid as the header */}
-              <div
-                className={`grid grid-cols-1 ${
-                  octave2Notes.length > 0 ? "lg:grid-cols-2" : ""
-                } gap-4 flex-1 min-h-0`}
-              >
-                <div className="panel relative flex min-h-0 flex-1 flex-col p-3">
-                  <div className="relative w-full flex-1 flex items-stretch gap-1.5 overflow-x-auto md:overflow-x-visible no-scrollbar min-h-0">
-                    {octave1Notes.map(renderPad)}
+              {/* One continuous keybed; a ruler above it names each octave at its C */}
+              <div className="panel relative flex min-h-0 flex-1 p-3">
+                <div className="flex min-h-0 flex-1 overflow-x-auto md:overflow-x-visible no-scrollbar">
+                  <div
+                    role="group"
+                    aria-label="Note pads"
+                    className="keybed"
+                    style={{ "--n": renderedPads.length } as React.CSSProperties}
+                  >
+                    {octaveGroups.map(g => (
+                      <div
+                        key={`oct-${g.octave}`}
+                        aria-hidden="true"
+                        className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap"
+                        style={{ gridRow: 1, gridColumn: `${g.start + 1} / span ${g.count}` }}
+                      >
+                        <span className="mono text-[11px] leading-none text-t3">
+                          C{octave + g.octave}
+                        </span>
+                        <span className="mt-[5px] h-[5px] min-w-0 flex-1 rounded-tr-[2px] border-r border-t border-[color:var(--line-2)]" />
+                      </div>
+                    ))}
+                    {renderedPads.map(renderPad)}
                   </div>
                 </div>
-
-                {octave2Notes.length > 0 && (
-                  <div className="panel relative flex min-h-0 flex-1 flex-col p-3">
-                    <div className="relative w-full flex-1 flex items-stretch gap-1.5 overflow-x-auto md:overflow-x-visible no-scrollbar min-h-0">
-                      {octave2Notes.map(renderPad)}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           );
@@ -2606,7 +2617,7 @@ export default function NeonSynthPad() {
                         className={`flex border-b ${
                           isRootC ? "border-white/[0.13]" : "border-white/[0.05]"
                         } group shrink-0 ${
-                          accidental ? "bg-[#080b11]" : "bg-[#0c111a]"
+                          accidental ? "bg-[#0a0e15]" : "bg-[#0c111a]"
                         } ${isDisabled ? "opacity-25 grayscale pointer-events-none" : ""}`}
                       >
                         {/* Sticky Piano Key Label */}
@@ -2614,8 +2625,6 @@ export default function NeonSynthPad() {
                           className={`sticky left-0 w-[52px] h-full flex items-center gap-0.5 px-2 text-xs font-medium border-r border-white/[0.1] z-50 shrink-0 transition-colors ${
                             isNoteSounding
                               ? "bg-[#1e2633] text-white"
-                              : accidental
-                              ? "bg-[#080b11] text-t3"
                               : isRootC
                               ? "bg-[#131a25] text-t1"
                               : "bg-[#0d121b] text-t2"

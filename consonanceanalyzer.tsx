@@ -362,11 +362,11 @@ const WAVE_PATHS: Record<OscillatorType, string> = {
 };
 
 const WAVE_SHORT: Record<OscillatorType, string> = {
-  sine: "Sin",
-  triangle: "Tri",
-  sawtooth: "Saw",
-  square: "Sqr",
-  custom: "Custom",
+  sine: "SIN",
+  triangle: "TRI",
+  sawtooth: "SAW",
+  square: "SQR",
+  custom: "CUSTOM",
 };
 
 const WAVE_FULL: Record<OscillatorType, string> = {
@@ -520,31 +520,25 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
     };
 
     const drawBezelFiducials = (width: number, height: number, cx: number, cy: number) => {
-      // Corner L-fiducials and center-axis calibration sub-ticks
       const pad = 6;
       const len = 6;
       ctx.strokeStyle = INK.guide;
       ctx.lineWidth = 1;
       ctx.beginPath();
-      // Top-left
       ctx.moveTo(pad, pad + len);
       ctx.lineTo(pad, pad);
       ctx.lineTo(pad + len, pad);
-      // Top-right
       ctx.moveTo(width - pad - len, pad);
       ctx.lineTo(width - pad, pad);
       ctx.lineTo(width - pad, pad + len);
-      // Bottom-left
       ctx.moveTo(pad, height - pad - len);
       ctx.lineTo(pad, height - pad);
       ctx.lineTo(pad + len, height - pad);
-      // Bottom-right
       ctx.moveTo(width - pad - len, height - pad);
       ctx.lineTo(width - pad, height - pad);
       ctx.lineTo(width - pad, height - pad - len);
       ctx.stroke();
 
-      // Axis calibration sub-ticks along the horizontal and vertical centerlines
       ctx.strokeStyle = INK.axis;
       ctx.beginPath();
       const subStep = 11;
@@ -2012,7 +2006,7 @@ export default function NeonSynthPad() {
 
   return (
     <div className="flex h-[100dvh] w-screen flex-col gap-3 overflow-y-auto overflow-x-hidden p-3 text-t1 select-none md:h-screen md:gap-4 md:overflow-hidden md:p-4">
-      {/* Audio start dialog */}
+      {/* Audio & WebMIDI initialization dialog */}
       {!hasInteracted && (
         <div
           role="dialog"
@@ -2029,16 +2023,17 @@ export default function NeonSynthPad() {
           autoFocus
           className="fixed inset-0 z-[100] bg-[#080a08]/95 flex items-center justify-center cursor-pointer"
         >
-          <div className="panel w-full max-w-[30rem] mx-4 p-6">
+          <div className="panel w-full max-w-[31rem] mx-4 p-6">
             <h1
               id="audio-init-title"
-              className="text-[22px] font-semibold leading-tight tracking-[-0.015em] text-t1 text-balance"
+              className="text-[22px] font-semibold leading-tight tracking-[-0.015em] text-t1"
             >
-              Consonance Synthesizer &amp; Vector Scope
+              Polyphonic Consonance Analyzer
             </h1>
-            <p className="mt-2.5 max-w-[52ch] text-sm leading-relaxed text-t2">
-              Play two or more notes and the scope shows how they relate: the interval or chord,
-              how consonant it is, and the shape it traces.
+            <p className="mt-2.5 max-w-[54ch] text-sm leading-relaxed text-t2">
+              Hold two voices to plot their just-intonation Lissajous ratio, or three or more to
+              trace a bass-demodulated phasor orbit. Trigger notes from QWERTY, pointer, external
+              MIDI, or the 16-step harmonic sequencer.
             </p>
 
             <button
@@ -2047,8 +2042,8 @@ export default function NeonSynthPad() {
               aria-label="Start audio and MIDI"
               className="btn btn-primary mt-6 w-full !h-11 !px-4 !text-sm justify-between"
             >
-              <span>Start audio</span>
-              <span className="mono text-xs font-medium opacity-70">Press Enter</span>
+              <span>Initialize audio &amp; MIDI engine</span>
+              <span className="mono text-xs font-medium opacity-75">Enter</span>
             </button>
           </div>
         </div>
@@ -2431,7 +2426,7 @@ export default function NeonSynthPad() {
           });
           const dense = renderedPads.length > 36;
           // Naturals start a little lower, so the raised accidentals carry the
-          // piano's 2 + 3 rhythm by physical profile.
+          // piano's 2 + 3 rhythm by shape alone, without a second surface colour.
           const accidentalDrop = dense ? 14 : 24;
 
           const renderPad = (i: number, col: number) => {
@@ -2453,18 +2448,14 @@ export default function NeonSynthPad() {
             const glyphSize = Math.max(16, Math.min(24, 420 / numNotes));
             const hasRelation = activeIndices.length > 0 && !isDisabled && type !== "neutral";
 
-            // Accidentals have a slightly deeper anodized key finish than naturals
-            // while remaining 100% neutral so colour is still strictly consonance data.
-            const padBg = isDisabled
-              ? "transparent"
-              : accidental
-              ? "#111411"
-              : "#181c18";
+            // Single uniform surface colour across natural and accidental pads so
+            // identical consonance buckets never appear as different shades.
+            const padBg = isDisabled ? "transparent" : "#141814";
             const padTint = !hasRelation
               ? "transparent"
               : isActive
               ? `${displayColor}3d`
-              : `${displayColor}14`;
+              : `${displayColor}16`;
             const padRing = isBinding
               ? `inset 0 0 0 2px ${INK.t1}`
               : isActive && !isDisabled
@@ -2530,22 +2521,6 @@ export default function NeonSynthPad() {
                 }
                 className={`pad group min-w-0 focus:z-30 ${isBinding ? "z-20" : ""}`}
               >
-                {/* Top hardware LED bar indicating active voice or harmonic relation */}
-                {!isDisabled && (
-                  <div
-                    aria-hidden="true"
-                    style={{
-                      backgroundColor: isActive
-                        ? displayColor
-                        : hasRelation
-                        ? displayColor
-                        : "rgba(218, 210, 190, 0.14)",
-                      opacity: isActive ? 1 : hasRelation ? 0.55 : 0.4,
-                    }}
-                    className="pointer-events-none absolute left-2 right-2 top-2 h-[2px] rounded-full transition-opacity"
-                  />
-                )}
-
                 <div
                   className={`pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center pb-3 ${
                     dense ? "gap-1.5 px-0" : "gap-2 px-1"
@@ -2587,9 +2562,9 @@ export default function NeonSynthPad() {
                   ) : (
                     <span
                       className={`keycap ${isDisabled ? "normal-case" : "uppercase"} ${
-                        dense ? "!min-w-0 !border-0 !bg-transparent !px-0 !text-[11px] !shadow-none" : ""
+                        dense ? "!min-w-0 !border-0 !bg-transparent !px-0 !text-[11px]" : ""
                       } ${isActive ? "!border-[#f2efe6] !text-[#f2efe6]" : ""} ${
-                        isDisabled ? "!border-transparent !bg-transparent !text-[#878174] !shadow-none" : ""
+                        isDisabled ? "!border-transparent !bg-transparent !text-[#878174]" : ""
                       }`}
                     >
                       {isDisabled ? "Off" : keyBindings[i]?.join(" ")}
@@ -2722,22 +2697,20 @@ export default function NeonSynthPad() {
                         style={{ height: `${rowHeight}px` }}
                         className={`flex border-b ${
                           isRootC ? "border-[#dad2be]/[0.16]" : "border-[#dad2be]/[0.055]"
-                        } group shrink-0 ${
-                          accidental ? "bg-[#0b0d0b]" : "bg-[#0e110e]"
-                        } ${isDisabled ? "opacity-25 grayscale pointer-events-none" : ""}`}
+                        } group shrink-0 bg-[#0d100d] ${
+                          isDisabled ? "opacity-25 grayscale pointer-events-none" : ""
+                        }`}
                       >
-                        {/* Sticky Piano Key Label */}
+                        {/* Sticky Piano Key Label: accidentals indent by pl-4 while keeping uniform surface luminance */}
                         <div
                           className={`sticky left-0 w-[52px] h-full flex items-center gap-0.5 px-2 ${
-                            accidental ? "pl-3.5" : ""
+                            accidental ? "pl-4" : ""
                           } mono text-[11px] font-medium border-r border-[#dad2be]/[0.12] z-50 shrink-0 transition-colors ${
                             isNoteSounding
                               ? "bg-[#262b25] text-t1"
                               : isRootC
-                              ? "bg-[#171b17] text-t1"
-                              : accidental
-                              ? "bg-[#0a0c0a] text-t3"
-                              : "bg-[#111411] text-t2"
+                              ? "bg-[#161a16] text-t1"
+                              : "bg-[#101310] text-t2"
                           } group-hover:text-t1`}
                           style={isNoteSounding ? { boxShadow: "inset 2px 0 0 #f2efe6" } : undefined}
                         >

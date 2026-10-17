@@ -283,7 +283,7 @@ const EncoderCell: React.FC<{
     className="flex h-full min-w-0 cursor-ns-resize flex-col items-center justify-center gap-1.5"
   >
     <span className="text-xs font-medium tracking-[0.02em] text-t2">{label}</span>
-    <div className="relative h-14 w-14">
+    <div className="relative h-14 w-14 max-md:h-12 max-md:w-12">
       <ArcDial value={value} min={min} max={max} />
       <div
         role="spinbutton"
@@ -2025,7 +2025,7 @@ export default function NeonSynthPad() {
     : [];
 
   return (
-    <div className="flex h-[100dvh] w-screen flex-col gap-3 overflow-y-auto overflow-x-hidden p-3 text-t1 select-none md:h-screen md:gap-4 md:overflow-hidden md:p-4">
+    <div className="flex h-[100dvh] w-screen flex-col gap-3 overflow-y-auto overflow-x-hidden p-3 text-t1 select-none max-md:gap-2 max-md:py-2 md:h-screen md:gap-4 md:overflow-hidden md:p-4">
       {/* Audio & WebMIDI initialization dialog */}
       {!hasInteracted && (
         <div
@@ -2065,14 +2065,15 @@ export default function NeonSynthPad() {
       {/* Header: two panels on the same two-row grid, so their dividers line up */}
       <header className="w-full max-w-[1720px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4 shrink-0 z-30 max-md:contents">
         {/* Left: harmonic readout, vector scope, legend */}
-        <section aria-label="Harmonic readout" className="panel p-3 flex flex-col max-md:order-1">
-          <div className="flex flex-col gap-3 md:h-[152px] md:flex-row">
-            <div className="flex min-w-0 flex-col justify-between gap-4 md:w-[232px] md:shrink-0 md:gap-0">
-              <div className="min-w-0">
+        <section aria-label="Harmonic readout" className="panel p-3 flex flex-col max-md:order-1 max-md:shrink-0">
+          <div className="flex flex-col gap-3 max-md:gap-2 md:h-[152px] md:flex-row">
+            {/* Phones: name and meta on the left, classification on the right, at a fixed height so the keybed never jumps */}
+            <div className="flex min-w-0 flex-col justify-between gap-4 max-md:h-[88px] max-md:flex-row max-md:items-start max-md:gap-3 md:w-[232px] md:shrink-0 md:gap-0">
+              <div className="min-w-0 max-md:flex-1">
                 {interval ? (
                   <>
                     <div
-                      className="truncate text-[32px] font-semibold leading-[1.05] tracking-[-0.02em] text-t1"
+                      className="truncate text-[28px] font-semibold leading-[1.05] tracking-[-0.02em] text-t1 md:text-[32px]"
                       title={interval.name}
                     >
                       {interval.name}
@@ -2082,7 +2083,9 @@ export default function NeonSynthPad() {
                         <span>{interval.diff} voices</span>
                       ) : (
                         <>
-                          <span>{interval.diff} semitones</span>
+                          <span>
+                            {interval.diff} {interval.diff === 1 ? "semitone" : "semitones"}
+                          </span>
                           {interval.percentage.split(" · ").map((part, idx) => (
                             <span key={part} className={`mono ${idx === 0 ? "text-t1" : "text-t2"}`}>
                               {part}
@@ -2091,7 +2094,7 @@ export default function NeonSynthPad() {
                         </>
                       )}
                     </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-1">
+                    <div className="mt-3 flex flex-wrap items-center gap-1 max-md:mt-2">
                       {sortedIntervalPitches.slice(0, 8).map((p, idx) => (
                         <span
                           key={`${p}-${idx}`}
@@ -2109,7 +2112,7 @@ export default function NeonSynthPad() {
                   </>
                 ) : (
                   <>
-                    <div className="text-[32px] font-semibold leading-[1.05] tracking-[-0.02em] text-t3">
+                    <div className="text-[28px] font-semibold leading-[1.05] tracking-[-0.02em] text-t3 md:text-[32px]">
                       Standby
                     </div>
                     <div className="mt-2 text-[13px] text-t3">Play 2+ notes to analyze</div>
@@ -2117,7 +2120,7 @@ export default function NeonSynthPad() {
                 )}
               </div>
 
-              <div className="flex h-6 items-center justify-between gap-2">
+              <div className="flex h-6 items-center justify-between gap-2 max-md:h-[34px] max-md:shrink-0 max-md:gap-3">
                 <span
                   className={`flex items-center gap-2 text-sm font-medium ${
                     interval ? "text-t1" : "text-t3"
@@ -2135,12 +2138,12 @@ export default function NeonSynthPad() {
               </div>
             </div>
 
-            <div className="well relative h-32 min-w-0 overflow-hidden md:h-auto md:flex-1">
+            <div className="well relative h-[clamp(80px,12dvh,180px)] min-w-0 overflow-hidden md:h-auto md:flex-1">
               <HarmonicVisualizer interval={interval} />
             </div>
           </div>
 
-          <div className="mt-3 -mx-3 grid grid-cols-2 gap-x-2 gap-y-2 border-t rule px-3 pt-3 box-content md:flex md:min-h-[28px] md:flex-wrap md:items-center md:gap-x-5 md:gap-y-1.5">
+          <div className="mt-3 -mx-3 grid grid-cols-2 gap-x-2 gap-y-2 border-t rule px-3 pt-3 box-content max-md:mt-2 max-md:flex max-md:flex-wrap max-md:justify-between max-md:gap-y-1 max-md:pt-2 md:flex md:min-h-[28px] md:flex-wrap md:items-center md:gap-x-5 md:gap-y-1.5">
             {LEGEND.map(({ bucket, label, hint }) => (
               <span
                 key={bucket}
@@ -2155,15 +2158,15 @@ export default function NeonSynthPad() {
         </section>
 
         {/* Right: transport, encoders, waveform, then view and file controls */}
-        <section aria-label="Controls" className="panel p-3 flex flex-col max-md:order-3">
-          <div className="flex flex-col gap-3 md:h-[152px] md:flex-row">
+        <section aria-label="Controls" className="panel p-3 flex flex-col max-md:order-3 max-md:shrink-0">
+          <div className="flex flex-col gap-3 max-md:grid max-md:grid-cols-[88px_minmax(0,1fr)] max-md:gap-2 md:h-[152px] md:flex-row">
             <button
               type="button"
               onClick={() => setIsPlaying(!isPlaying)}
               data-playing={isPlaying}
               aria-label={isPlaying ? "Stop sequence playback" : "Start sequence playback"}
               title="Play or stop (Space)"
-              className="transport max-md:h-12 max-md:w-full max-md:flex-row max-md:gap-3"
+              className="transport max-md:h-[52px] max-md:w-full max-md:flex-row max-md:gap-2"
             >
               {isPlaying ? (
                 <Square size={20} fill="currentColor" />
@@ -2173,7 +2176,7 @@ export default function NeonSynthPad() {
               <span>{isPlaying ? "Stop" : "Play"}</span>
             </button>
 
-            <div className="well grid min-w-0 grid-cols-3 cols-rule max-md:py-3 md:flex-1">
+            <div className="well grid min-w-0 grid-cols-3 cols-rule max-md:order-last max-md:col-span-2 max-md:py-1.5 md:flex-1">
               <EncoderCell
                 label="BPM"
                 display={String(bpm)}
@@ -2221,7 +2224,7 @@ export default function NeonSynthPad() {
             <div
               role="radiogroup"
               aria-label="Waveform"
-              className="well grid grid-cols-4 gap-1 p-1 md:w-[136px] md:shrink-0 md:grid-cols-2"
+              className="well grid grid-cols-4 gap-1 p-1 max-md:h-[52px] md:w-[136px] md:shrink-0 md:grid-cols-2"
             >
               {WAVES.map(t => (
                 <button
@@ -2232,7 +2235,7 @@ export default function NeonSynthPad() {
                   aria-label={WAVE_FULL[t]}
                   title={WAVE_FULL[t]}
                   onClick={() => setWaveType(t)}
-                  className="wave max-md:py-2"
+                  className="wave max-md:gap-1"
                 >
                   <WaveGlyph type={t} />
                   <span>{WAVE_SHORT[t]}</span>
@@ -2241,9 +2244,10 @@ export default function NeonSynthPad() {
             </div>
           </div>
 
-          <div className="mt-3 -mx-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t rule px-3 pt-3 box-content">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="seg max-md:w-full" role="group" aria-label="Surface">
+          <div className="mt-3 -mx-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t rule px-3 pt-3 box-content max-md:mt-2 max-md:gap-x-2 max-md:gap-y-1 max-md:pt-2">
+            {/* Phones: both groups dissolve into one wrapping row; view switch and MIDI lead, actions follow */}
+            <div className="flex flex-wrap items-center gap-2 max-md:contents">
+              <div className="seg max-md:order-first" role="group" aria-label="Surface">
                 <button
                   type="button"
                   onClick={() => setViewMode("pad")}
@@ -2271,7 +2275,7 @@ export default function NeonSynthPad() {
                     onClick={() => setHideDisabled(!hideDisabled)}
                     aria-pressed={hideDisabled}
                     aria-label="Hide muted pads"
-                    className="btn max-md:flex-1"
+                    className="btn max-md:flex-1 max-md:px-2"
                     title={hideDisabled ? "Show muted pads" : "Hide muted pads"}
                   >
                     {hideDisabled ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -2287,7 +2291,7 @@ export default function NeonSynthPad() {
                     aria-label={
                       editMode ? "Exit key binding mode" : "Configure key bindings and mute pads"
                     }
-                    className="btn max-md:flex-1"
+                    className="btn max-md:flex-1 max-md:px-2"
                     title="Configure key bindings and mute pads"
                   >
                     <Settings2 size={14} />
@@ -2298,7 +2302,7 @@ export default function NeonSynthPad() {
 
               {viewMode === "roll" && (
                 <>
-                  <div className="seg" role="group" aria-label="Edit tool">
+                  <div className="seg max-md:my-0.5" role="group" aria-label="Edit tool">
                     <button
                       type="button"
                       onClick={() => setEditTool("draw")}
@@ -2332,7 +2336,7 @@ export default function NeonSynthPad() {
                     </button>
                   </div>
 
-                  <div className="seg" role="group" aria-label="Clipboard">
+                  <div className="seg max-md:my-0.5" role="group" aria-label="Clipboard">
                     <button
                       type="button"
                       onClick={copySelection}
@@ -2378,28 +2382,30 @@ export default function NeonSynthPad() {
               )}
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* Phones: forces the row break after view switch + MIDI, whatever the width */}
+            <div aria-hidden="true" className="hidden max-md:order-[-9998] max-md:block max-md:h-0 max-md:basis-full" />
+            <div className="flex items-center gap-2 max-md:contents">
               <button
                 type="button"
                 onClick={exportSequence}
                 aria-label="Export sequence to JSON file"
-                className="btn"
+                className="btn max-md:w-10 max-md:shrink-0 max-md:px-0"
                 title="Export sequence as JSON"
               >
                 <Download size={14} />
-                <span className="hidden max-md:inline 2xl:inline">Export</span>
+                <span className="hidden 2xl:inline">Export</span>
               </button>
               <label
                 aria-label="Import sequence from JSON file"
-                className="btn"
+                className="btn max-md:w-10 max-md:shrink-0 max-md:px-0"
                 title="Import sequence from JSON"
               >
                 <Upload size={14} />
-                <span className="hidden max-md:inline 2xl:inline">Import</span>
+                <span className="hidden 2xl:inline">Import</span>
                 <input type="file" accept=".json" onChange={importSequence} className="sr-only" />
               </label>
               <div
-                className={`flex items-center gap-1.5 px-1 text-xs ${
+                className={`flex items-center gap-1.5 px-1 text-xs max-md:order-first max-md:ml-auto ${
                   midiStatus === "connected" ? "text-t1" : "text-t3"
                 }`}
                 title={`MIDI status: ${midiStatus}`}
@@ -2422,7 +2428,7 @@ export default function NeonSynthPad() {
       </header>
 
       {/* MAIN INSTRUMENT WORKSPACE */}
-      <main className="flex-1 w-full max-w-[1720px] mx-auto flex flex-col min-h-[460px] max-md:order-2 md:min-h-0">
+      <main className={`flex-1 w-full max-w-[1720px] mx-auto flex flex-col ${viewMode === "pad" ? "min-h-[168px] max-md:max-h-[340px]" : "min-h-[340px]"} max-md:order-2 md:min-h-0`}>
         {viewMode === "pad" ? (() => {
           const renderedPads = Array.from({ length: numNotes })
             .map((_, i) => i)

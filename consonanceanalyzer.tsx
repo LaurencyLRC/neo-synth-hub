@@ -202,7 +202,7 @@ const ArcDial: React.FC<{
       width={size}
       height={size}
       viewBox={`0 0 ${size} ${size}`}
-      className="absolute inset-0"
+      className="absolute inset-0 h-full w-full"
       aria-hidden="true"
     >
       {ticks.map((t, idx) => (
@@ -1267,10 +1267,13 @@ export default function NeonSynthPad() {
 
   const containerWidth = containerSize.width;
   const availRollHeight = Math.max(320, (containerSize.height || 500) - 32);
-  const rowHeight =
+  const baseRowHeight =
     renderedNoteIndices.length <= 24
       ? availRollHeight / Math.max(1, renderedNoteIndices.length)
       : Math.max(24, availRollHeight / 24);
+  // Phones: never thinner than a finger-sized lane; the roll scrolls vertically instead.
+  const isPhoneWidth = typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
+  const rowHeight = isPhoneWidth ? Math.max(32, baseRowHeight) : baseRowHeight;
 
   const effectiveStepWidth = useMemo(() => {
     if (containerWidth > 120 && numSteps > 0) {
@@ -2120,7 +2123,7 @@ export default function NeonSynthPad() {
                 )}
               </div>
 
-              <div className="flex h-6 items-center justify-between gap-2 max-md:h-[34px] max-md:shrink-0 max-md:gap-3">
+              <div className="flex h-6 items-center justify-between gap-2 max-md:mb-0.5 max-md:h-[22px] max-md:shrink-0 max-md:gap-3 max-md:self-end">
                 <span
                   className={`flex items-center gap-2 text-sm font-medium ${
                     interval ? "text-t1" : "text-t3"
@@ -2428,7 +2431,7 @@ export default function NeonSynthPad() {
       </header>
 
       {/* MAIN INSTRUMENT WORKSPACE */}
-      <main className={`flex-1 w-full max-w-[1720px] mx-auto flex flex-col ${viewMode === "pad" ? "min-h-[168px] max-md:max-h-[340px]" : "min-h-[340px]"} max-md:order-2 md:min-h-0`}>
+      <main className={`flex-1 w-full max-w-[1720px] mx-auto flex flex-col ${viewMode === "pad" ? "min-h-[168px] max-md:max-h-[340px]" : "min-h-[400px]"} max-md:order-2 md:min-h-0`}>
         {viewMode === "pad" ? (() => {
           const renderedPads = Array.from({ length: numNotes })
             .map((_, i) => i)

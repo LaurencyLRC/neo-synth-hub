@@ -3,33 +3,59 @@
 @tailwind utilities;
 
 /*
-  Design tokens.
-  Colour is data: the four consonance hues (perfect / consonant / mild /
-  dissonant) live in the component and are never used for chrome. Everything
-  below is a neutral ramp, so a coloured mark on screen always means something.
+  Design tokens — Acoustic Laboratory & Anodized Instrument Chassis.
+  Colour is strictly data: the four consonance phosphor hues (perfect /
+  consonant / mild / dissonant) live in the component and are never used for
+  chrome. The chassis uses an OKLCH-calibrated warm mineral-graphite ramp with
+  warm bone/sand silkscreen typography so any coloured mark always carries
+  harmonic meaning.
 */
 :root {
-  --font-ui: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-ui: "Chivo", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: "Azeret Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* Three flat surface tiers + two raised steps */
-  --bg: #07090e;
-  --s1: #0d1118; /* panels */
-  --s2: #090c12; /* recessed: scope, wells, roll */
-  --s3: #161c27; /* hover, idle transport */
-  --s4: #1e2633; /* selected / pressed segment */
+  /* Warm anodized olive-graphite chassis tiers (OKLCH calibrated with hex fallbacks) */
+  --bg: #0b0d0b;
+  --s1: #131613; /* primary instrument deck */
+  --s2: #080a08; /* recessed CRT scope well, encoder bay, sequencer roll */
+  --s3: #1c201c; /* raised key / hover surface */
+  --s4: #262b25; /* engaged / latched switch surface */
 
-  --line: rgba(148, 163, 184, 0.14);
-  --line-2: rgba(148, 163, 184, 0.28);
+  /* Warm mineral hairlines */
+  --line: rgba(218, 210, 190, 0.13);
+  --line-2: rgba(218, 210, 190, 0.28);
+  --line-bright: rgba(242, 239, 230, 0.48);
 
-  --t1: #e9eef6; /* primary text */
-  --t2: #a3aebf; /* secondary text */
-  --t3: #7b879b; /* tertiary / disabled (still ≥ 4.5:1 on --s1) */
+  /* Silkscreen ink hierarchy (tinted with warm bone, never raw neutral grey) */
+  --t1: #f2efe6; /* primary silkscreen legend (≥ 15:1 on --s1) */
+  --t2: #b5afa0; /* secondary calibration label (≥ 7.5:1 on --s1) */
+  --t3: #878174; /* tertiary index / muted state (≥ 4.6:1 on --s1) */
 
-  --r-panel: 8px;
-  --r-ctl: 5px;
+  --r-panel: 6px;
+  --r-ctl: 4px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
   color-scheme: dark;
+  accent-color: var(--t1);
+  caret-color: var(--t1);
+}
+
+@supports (color: oklch(0% 0 0)) {
+  :root {
+    --bg: oklch(15.2% 0.008 135);
+    --s1: oklch(19.5% 0.009 132);
+    --s2: oklch(13.2% 0.008 138);
+    --s3: oklch(23.8% 0.011 130);
+    --s4: oklch(28.2% 0.013 128);
+    --t1: oklch(95.2% 0.014 88);
+    --t2: oklch(75.5% 0.022 86);
+    --t3: oklch(60.2% 0.022 84);
+  }
+}
+
+::selection {
+  background-color: rgba(56, 232, 214, 0.24);
+  color: var(--t1);
 }
 
 html,
@@ -47,7 +73,7 @@ body,
   overflow: hidden;
 }
 
-/* One focus treatment for the whole app */
+/* Crisp, accessible focus rings with offset across all interactive primitives */
 :focus {
   outline: none;
 }
@@ -68,6 +94,7 @@ body,
   }
   .mono {
     font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
   }
   .rule {
     border-color: var(--line);
@@ -75,22 +102,27 @@ body,
 }
 
 @layer components {
-  /* Surfaces: flat, hairline-bordered, no gradients or shadows */
+  /* Instrument deck panels: boundary-defined, zero diffuse drop-shadow */
   .panel {
     background: var(--s1);
     border: 1px solid var(--line);
     border-radius: var(--r-panel);
+    box-shadow: inset 0 1px 0 rgba(255, 250, 235, 0.035);
   }
+
+  /* Recessed oscilloscope and control wells */
   .well {
     background: var(--s2);
     border: 1px solid var(--line);
-    border-radius: 6px;
+    border-radius: 5px;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.55);
   }
+
   .cols-rule > * + * {
     border-left: 1px solid var(--line);
   }
 
-  /* Buttons */
+  /* Tactile hardware buttons */
   .btn {
     display: inline-flex;
     align-items: center;
@@ -100,56 +132,70 @@ body,
     padding: 0 10px;
     border-radius: var(--r-ctl);
     border: 1px solid var(--line);
-    background: transparent;
+    background: rgba(255, 252, 240, 0.015);
     color: var(--t2);
     font-size: 12px;
     font-weight: 500;
+    letter-spacing: 0.01em;
     line-height: 1;
     white-space: nowrap;
     cursor: pointer;
-    transition: background-color 0.12s, color 0.12s, border-color 0.12s;
+    box-shadow: inset 0 1px 0 rgba(255, 252, 240, 0.04);
+    transition:
+      background-color 140ms var(--ease-out),
+      color 140ms var(--ease-out),
+      border-color 140ms var(--ease-out),
+      transform 100ms var(--ease-out);
   }
   .btn:hover:not(:disabled) {
     background: var(--s3);
-    color: var(--t1);
-  }
-  .btn[aria-pressed="true"] {
-    background: var(--s4);
     border-color: var(--line-2);
     color: var(--t1);
   }
+  .btn:active:not(:disabled) {
+    transform: translateY(0.5px);
+  }
+  .btn[aria-pressed="true"] {
+    background: var(--s4);
+    border-color: var(--line-bright);
+    color: var(--t1);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45);
+  }
   .btn:disabled {
     color: var(--t3);
-    opacity: 0.55;
+    opacity: 0.5;
     cursor: default;
   }
   .btn-icon {
-    width: 28px;
+    width: 26px;
+    height: 24px;
     padding: 0;
   }
   .btn-primary {
     background: var(--t1);
     border-color: transparent;
-    color: #0b0f16;
+    color: #0b0d0b;
     font-weight: 600;
+    box-shadow: none;
   }
   .btn-primary:hover:not(:disabled) {
     background: #ffffff;
-    color: #0b0f16;
+    color: #0b0d0b;
   }
   .btn:focus-within {
     outline: 2px solid var(--t1);
     outline-offset: 2px;
   }
 
-  /* Segmented control. Inner radius = outer radius − padding − border. */
+  /* Segmented switch bank */
   .seg {
     display: inline-flex;
     gap: 2px;
     padding: 2px;
-    border-radius: 7px;
+    border-radius: 6px;
     background: var(--s2);
     border: 1px solid var(--line);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
   }
   .seg-item {
     display: inline-flex;
@@ -158,14 +204,18 @@ body,
     gap: 6px;
     height: 24px;
     padding: 0 10px;
-    border-radius: 4px;
+    border-radius: 3.5px;
     color: var(--t2);
     font-size: 12px;
     font-weight: 500;
+    letter-spacing: 0.01em;
     line-height: 1;
     white-space: nowrap;
     cursor: pointer;
-    transition: background-color 0.12s, color 0.12s;
+    transition:
+      background-color 140ms var(--ease-out),
+      color 140ms var(--ease-out),
+      box-shadow 140ms var(--ease-out);
   }
   .seg-item:hover:not(:disabled) {
     color: var(--t1);
@@ -173,11 +223,13 @@ body,
   .seg-item[aria-pressed="true"] {
     background: var(--s4);
     color: var(--t1);
-    box-shadow: inset 0 0 0 1px var(--line-2);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 252, 240, 0.08),
+      inset 0 0 0 1px var(--line-2);
   }
   .seg-item:disabled {
     color: var(--t3);
-    opacity: 0.5;
+    opacity: 0.45;
     cursor: default;
   }
   .seg-icon {
@@ -185,7 +237,7 @@ body,
     padding: 0;
   }
 
-  /* Label | − | value | + */
+  /* Precision Stepper: Label | − | value | + */
   .stepper {
     display: inline-flex;
     align-items: stretch;
@@ -204,6 +256,8 @@ body,
     align-items: center;
     padding: 0 10px;
     color: var(--t3);
+    font-size: 11px;
+    letter-spacing: 0.02em;
     white-space: nowrap;
   }
   .stepper-value {
@@ -213,7 +267,10 @@ body,
     min-width: 48px;
     padding: 0 8px;
     color: var(--t1);
+    font-family: var(--font-mono);
+    font-size: 12px;
     font-weight: 500;
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
   .stepper-btn {
@@ -223,50 +280,58 @@ body,
     width: 28px;
     color: var(--t2);
     cursor: pointer;
-    transition: background-color 0.12s, color 0.12s;
+    transition:
+      background-color 140ms var(--ease-out),
+      color 140ms var(--ease-out);
   }
   .stepper-btn:hover {
     background: var(--s3);
     color: var(--t1);
   }
 
-  /* Keycap and voice chip */
+  /* Hardware keycap badge & active voice chip */
   .keycap {
     display: inline-block;
     min-width: 26px;
     max-width: 100%;
-    height: 22px;
+    height: 21px;
     padding: 0 6px;
-    border-radius: 4px;
+    border-radius: 3px;
     border: 1px solid var(--line-2);
     background: var(--s2);
     color: var(--t2);
-    font-size: 12px;
+    font-family: var(--font-mono);
+    font-size: 11px;
     font-weight: 500;
-    line-height: 20px;
+    line-height: 19px;
     text-align: center;
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis; /* long bindings such as "Enter" truncate instead of clipping both sides */
+    text-overflow: ellipsis;
+    box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.5);
   }
+
   .chip {
     display: inline-flex;
     align-items: center;
     height: 22px;
     padding: 0 8px;
-    border-radius: 4px;
+    border-radius: 3px;
     border: 1px solid var(--line);
+    background: var(--s2);
     color: var(--t2);
-    font-size: 12px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
     font-weight: 500;
     line-height: 1;
   }
   .chip[data-bass="true"] {
-    border-color: var(--line-2);
+    border-color: var(--line-bright);
+    background: var(--s3);
     color: var(--t1);
   }
 
-  /* Transport: the one loud control in the chrome */
+  /* Master Transport Switch: commanding physical trigger */
   .transport {
     display: flex;
     flex-direction: column;
@@ -275,52 +340,68 @@ body,
     gap: 10px;
     width: 88px;
     flex-shrink: 0;
-    border-radius: 6px;
+    border-radius: 5px;
     border: 1px solid var(--line-2);
     background: var(--s3);
     color: var(--t1);
     font-size: 13px;
     font-weight: 600;
+    letter-spacing: 0.01em;
     cursor: pointer;
-    transition: background-color 0.12s, color 0.12s;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 252, 240, 0.07),
+      inset 0 -2px 0 rgba(0, 0, 0, 0.45);
+    transition:
+      background-color 140ms var(--ease-out),
+      color 140ms var(--ease-out),
+      border-color 140ms var(--ease-out),
+      transform 100ms var(--ease-out);
   }
   .transport:hover {
     background: var(--s4);
+    border-color: var(--line-bright);
+  }
+  .transport:active {
+    transform: translateY(1px);
   }
   .transport[data-playing="true"] {
     background: var(--t1);
     border-color: transparent;
-    color: #0b0f16;
+    color: #0b0d0b;
+    box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.35);
   }
 
-  /* Waveform picker cell */
+  /* Oscillator Waveform Selector Cell */
   .wave {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    border-radius: 4px;
+    gap: 7px;
+    border-radius: 3.5px;
     color: var(--t3);
-    font-size: 12px;
+    font-family: var(--font-mono);
+    font-size: 11px;
     font-weight: 500;
     cursor: pointer;
-    transition: background-color 0.12s, color 0.12s;
+    transition:
+      background-color 140ms var(--ease-out),
+      color 140ms var(--ease-out),
+      box-shadow 140ms var(--ease-out);
   }
   .wave:hover {
     color: var(--t1);
+    background: rgba(255, 252, 240, 0.025);
   }
   .wave[aria-checked="true"] {
     background: var(--s4);
     color: var(--t1);
-    box-shadow: inset 0 0 0 1px var(--line-2);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 252, 240, 0.08),
+      inset 0 0 0 1px var(--line-2);
   }
 
-  /*
-    Keybed: one continuous grid for every pad, with a ruler row above it.
-    Columns are equal by construction, so an odd note count can never leave
-    a lopsided half. Below md the pads keep a 44px touch width and the bed scrolls.
-  */
+  /* Continuous Keybed Grid */
   .keybed {
     display: grid;
     flex: 1 1 0;
@@ -336,44 +417,77 @@ body,
     }
   }
 
-  /* Pad: one flat surface for every note; colour comes only from the consonance tint */
+  /*
+    Tactile Synth Pad:
+    Uses physical key-travel bevels and a top LED crown slot while keeping
+    chromatic hue strictly reserved for harmonic consonance relationships.
+  */
   .pad {
     position: relative;
     overflow: hidden;
-    border-radius: 6px;
+    border-radius: 5px;
     border: 1px solid var(--line);
-    background-color: var(--pad-bg, #111721);
-    background-image: linear-gradient(var(--pad-tint, transparent), var(--pad-tint, transparent));
+    background-color: var(--pad-bg, #161916);
+    background-image: linear-gradient(
+      180deg,
+      var(--pad-tint, transparent) 0%,
+      var(--pad-tint, transparent) 100%
+    );
     cursor: pointer;
-    transition: box-shadow 0.08s;
+    transition:
+      transform 90ms var(--ease-out),
+      box-shadow 120ms var(--ease-out),
+      border-color 120ms var(--ease-out);
+  }
+  .pad::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 252, 240, 0.06),
+      inset 0 -3px 0 rgba(0, 0, 0, 0.5);
+    transition: box-shadow 90ms var(--ease-out);
+  }
+  .pad[aria-pressed="true"] {
+    transform: translateY(1.5px);
+  }
+  .pad[aria-pressed="true"]::before {
+    box-shadow:
+      inset 0 1px 2px rgba(0, 0, 0, 0.5),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.35);
   }
   .pad::after {
     content: "";
     position: absolute;
     inset: 0;
-    background: rgba(255, 255, 255, 0);
+    background: rgba(242, 239, 230, 0);
     pointer-events: none;
-    transition: background-color 0.1s;
+    transition: background-color 120ms var(--ease-out);
   }
   .pad:hover::after {
-    background: rgba(255, 255, 255, 0.035);
+    background: rgba(242, 239, 230, 0.035);
   }
   .pad[data-edit="true"]:hover::after {
-    background: rgba(255, 255, 255, 0.07);
+    background: rgba(242, 239, 230, 0.075);
   }
   .pad[aria-disabled="true"] {
     border-style: dashed;
-    opacity: 0.45;
+    opacity: 0.42;
+  }
+  .pad[aria-disabled="true"]::before {
+    box-shadow: none;
   }
   .pad:hover .keycap {
     color: var(--t1);
+    border-color: var(--line-bright);
   }
   .pad:focus-visible {
     outline-offset: -3px;
   }
 }
 
-/* Slim scrollbars for the piano roll */
+/* Custom scrollbars for the sequencer roll */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -382,11 +496,12 @@ body,
   background: var(--s2);
 }
 ::-webkit-scrollbar-thumb {
-  background: #232c3b;
+  background: #282d27;
   border-radius: 4px;
+  border: 1px solid rgba(218, 210, 190, 0.12);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #334155;
+  background: #383f37;
 }
 
 .no-scrollbar::-webkit-scrollbar {
@@ -397,7 +512,7 @@ body,
   scrollbar-width: none;
 }
 
-/* Range slider: flat track with a filled portion, round thumb */
+/* Hardware Fader / Range Slider */
 input[type="range"].hw-slider {
   -webkit-appearance: none;
   appearance: none;
@@ -409,11 +524,11 @@ input[type="range"].hw-slider {
 input[type="range"].hw-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
+  width: 10px;
+  height: 14px;
+  border-radius: 2px;
   background: var(--t1);
-  border: 0;
+  border: 1px solid #0b0d0b;
   cursor: ew-resize;
 }
 input[type="range"].hw-slider::-moz-range-track {
@@ -427,11 +542,11 @@ input[type="range"].hw-slider::-moz-range-progress {
   background: var(--t2);
 }
 input[type="range"].hw-slider::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
+  width: 10px;
+  height: 14px;
+  border-radius: 2px;
   background: var(--t1);
-  border: 0;
+  border: 1px solid #0b0d0b;
   cursor: ew-resize;
 }
 

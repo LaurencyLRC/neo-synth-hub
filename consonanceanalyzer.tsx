@@ -72,26 +72,26 @@ const DEFAULT_KEYS_EXTENDED = [
 const getChordName = (idx: number[]) =>
   detectChord(idx).name.replace(/^Unknown\s*:.*$/i, "Unknown");
 
-// Colour is data: these four hues only ever mean "how consonant". Everything
-// else in the interface is neutral (see the tokens in index.css).
+// Colour is strictly harmonic data: calibrated CRT phosphor signal hues.
+// Chrome surfaces never use these hues, so every coloured mark carries meaning.
 const COLORS = {
-  neutral: "#e2e8f0",
-  perfect: "#22d3ee",
-  consonant: "#10b981",
-  slightly: "#fbbf24",
-  dissonant: "#f43f5e",
+  neutral: "#f2efe6",
+  perfect: "#38e8d6",   // Phase-locked celadon-cyan phosphor
+  consonant: "#6ee777", // Warm resonant mint-green phosphor
+  slightly: "#f7b733",  // Sodium-amber harmonic tension
+  dissonant: "#ff5c4d", // Vermilion high-roughness signal
 };
 
-// Neutral ramp mirrored from the CSS tokens, for canvas and SVG drawing.
+// Warm anodized mineral-graphite & bone-silkscreen ramp mirrored from index.css
 const INK = {
-  bg: "#090c12",
-  track: "#1e2633",
-  t1: "#e9eef6",
-  t2: "#a3aebf",
-  t3: "#7b879b",
-  grid: "rgba(148, 163, 184, 0.07)",
-  axis: "rgba(148, 163, 184, 0.18)",
-  guide: "rgba(148, 163, 184, 0.28)",
+  bg: "#080a08",
+  track: "#262b25",
+  t1: "#f2efe6",
+  t2: "#b5afa0",
+  t3: "#878174",
+  grid: "rgba(218, 210, 190, 0.06)",
+  axis: "rgba(218, 210, 190, 0.16)",
+  guide: "rgba(218, 210, 190, 0.28)",
 };
 
 const LEGEND: { bucket: keyof typeof COLORS; label: string; hint: string }[] = [
@@ -159,8 +159,8 @@ const computeOrbitRevolutions = (pitches: number[]) => {
   return Math.min(overallLcm, 30);
 };
 
-// Arc gauge for the encoders: a neutral 270° track with a value arc. The
-// numeric readout is layered on top by EncoderCell.
+// Calibrated rotary encoder gauge: 270° sweep with peripheral detent ticks
+// and a rotor pointer dot tracking the active angle.
 const ArcDial: React.FC<{
   value: number;
   min: number;
@@ -168,12 +168,31 @@ const ArcDial: React.FC<{
   size?: number;
 }> = ({ value, min, max, size = 56 }) => {
   const norm = Math.max(0, Math.min(1, (value - min) / Math.max(1, max - min)));
-  const stroke = 3.5;
+  const stroke = 3;
   const c = size / 2;
-  const r = c - stroke / 2 - 1;
+  const r = c - stroke / 2 - 4;
   const circ = 2 * Math.PI * r;
   const arcLen = circ * 0.75; // 270 deg sweep
   const filled = arcLen * norm;
+
+  const angleDeg = 135 + norm * 270;
+  const angleRad = (angleDeg * Math.PI) / 180;
+  const dotX = c + r * Math.cos(angleRad);
+  const dotY = c + r * Math.sin(angleRad);
+
+  const ticks = Array.from({ length: 11 }, (_, idx) => {
+    const tDeg = 135 + (idx / 10) * 270;
+    const tRad = (tDeg * Math.PI) / 180;
+    const rIn = r + 3.2;
+    const rOut = r + (idx % 5 === 0 ? 5.2 : 4.2);
+    return {
+      x1: c + rIn * Math.cos(tRad),
+      y1: c + rIn * Math.sin(tRad),
+      x2: c + rOut * Math.cos(tRad),
+      y2: c + rOut * Math.sin(tRad),
+      major: idx % 5 === 0,
+    };
+  });
 
   return (
     <svg
@@ -183,6 +202,19 @@ const ArcDial: React.FC<{
       className="absolute inset-0"
       aria-hidden="true"
     >
+      {ticks.map((t, idx) => (
+        <line
+          key={idx}
+          x1={t.x1}
+          y1={t.y1}
+          x2={t.x2}
+          y2={t.y2}
+          stroke={t.major ? INK.t2 : INK.t3}
+          strokeOpacity={t.major ? 0.55 : 0.3}
+          strokeWidth={1}
+          strokeLinecap="round"
+        />
+      ))}
       <circle
         cx={c}
         cy={c}
@@ -207,6 +239,7 @@ const ArcDial: React.FC<{
           transform={`rotate(135 ${c} ${c})`}
         />
       )}
+      <circle cx={dotX} cy={dotY} r={2.2} fill={INK.t1} />
     </svg>
   );
 };
@@ -244,9 +277,9 @@ const EncoderCell: React.FC<{
     onMouseDown={onMouseDown}
     onWheel={e => onWheelStep(e.deltaY < 0 ? 1 : -1)}
     title={title}
-    className="flex h-full min-w-0 cursor-ns-resize flex-col items-center justify-center gap-2"
+    className="flex h-full min-w-0 cursor-ns-resize flex-col items-center justify-center gap-1.5"
   >
-    <span className="text-xs font-medium text-t2">{label}</span>
+    <span className="text-[11px] font-medium tracking-[0.02em] text-t2">{label}</span>
     <div className="relative h-14 w-14">
       <ArcDial value={value} min={min} max={max} />
       <div
@@ -255,17 +288,17 @@ const EncoderCell: React.FC<{
         aria-valuenow={value}
         aria-valuemin={min}
         aria-valuemax={max}
-        className="absolute inset-0 flex items-center justify-center text-[15px] font-semibold text-t1"
+        className="mono absolute inset-0 flex items-center justify-center text-[13px] font-semibold tracking-tight text-t1"
       >
         {display}
       </div>
     </div>
     <div className="flex items-center gap-1.5">
       <button type="button" onClick={() => onStep(-1)} aria-label={decLabel} className="btn btn-icon">
-        <Minus size={14} />
+        <Minus size={13} />
       </button>
       <button type="button" onClick={() => onStep(1)} aria-label={incLabel} className="btn btn-icon">
-        <Plus size={14} />
+        <Plus size={13} />
       </button>
     </div>
   </div>
@@ -357,7 +390,7 @@ const WaveGlyph: React.FC<{ type: OscillatorType }> = ({ type }) => (
 );
 
 // The consonance vocabulary, drawn once: diamond = perfect, circle = consonant,
-// triangle = mild, dot = dissonant. Used in the legend, the readout and on pads,
+// triangle = mild, cross = dissonant. Used in the legend, the readout and on pads,
 // so shape and colour always say the same thing.
 const ConsonanceGlyph: React.FC<{
   bucket: keyof typeof COLORS;
@@ -377,7 +410,13 @@ const ConsonanceGlyph: React.FC<{
       {bucket === "consonant" && <circle cx="12" cy="12" r="9" {...outline} />}
       {bucket === "slightly" && <path d="M12 2 22 20H2Z" {...outline} />}
       {bucket === "dissonant" && (
-        <path d="M5.5 5.5 18.5 18.5M18.5 5.5 5.5 18.5" fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" />
+        <path
+          d="M5.5 5.5 18.5 18.5M18.5 5.5 5.5 18.5"
+          fill="none"
+          stroke={color}
+          strokeWidth={2.5}
+          strokeLinecap="round"
+        />
       )}
     </svg>
   );
@@ -454,6 +493,9 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
 
     let running = true;
     let lastTime = performance.now();
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
     const drawOsdText = (
       text: string,
@@ -465,10 +507,10 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
     ) => {
       ctx.save();
       ctx.font = mono
-        ? "400 11px 'IBM Plex Mono', ui-monospace, monospace"
-        : "500 11px 'IBM Plex Sans', system-ui, sans-serif";
+        ? "500 10.5px 'Azeret Mono', 'IBM Plex Mono', ui-monospace, monospace"
+        : "500 11px 'Chivo', 'IBM Plex Sans', system-ui, sans-serif";
       ctx.textAlign = align;
-      ctx.strokeStyle = "rgba(9, 12, 18, 0.9)";
+      ctx.strokeStyle = "rgba(8, 10, 8, 0.92)";
       ctx.lineWidth = 3;
       ctx.lineJoin = "round";
       ctx.strokeText(text, x, y);
@@ -477,9 +519,50 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
       ctx.restore();
     };
 
+    const drawBezelFiducials = (width: number, height: number, cx: number, cy: number) => {
+      // Corner L-fiducials and center-axis calibration sub-ticks
+      const pad = 6;
+      const len = 6;
+      ctx.strokeStyle = INK.guide;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      // Top-left
+      ctx.moveTo(pad, pad + len);
+      ctx.lineTo(pad, pad);
+      ctx.lineTo(pad + len, pad);
+      // Top-right
+      ctx.moveTo(width - pad - len, pad);
+      ctx.lineTo(width - pad, pad);
+      ctx.lineTo(width - pad, pad + len);
+      // Bottom-left
+      ctx.moveTo(pad, height - pad - len);
+      ctx.lineTo(pad, height - pad);
+      ctx.lineTo(pad + len, height - pad);
+      // Bottom-right
+      ctx.moveTo(width - pad - len, height - pad);
+      ctx.lineTo(width - pad, height - pad);
+      ctx.lineTo(width - pad, height - pad - len);
+      ctx.stroke();
+
+      // Axis calibration sub-ticks along the horizontal and vertical centerlines
+      ctx.strokeStyle = INK.axis;
+      ctx.beginPath();
+      const subStep = 11;
+      for (let x = cx % subStep; x < width; x += subStep) {
+        ctx.moveTo(x, cy - 2);
+        ctx.lineTo(x, cy + 2);
+      }
+      for (let y = cy % subStep; y < height; y += subStep) {
+        ctx.moveTo(cx - 2, y);
+        ctx.lineTo(cx + 2, y);
+      }
+      ctx.stroke();
+    };
+
     const render = (time: number) => {
       if (!running) return;
-      const dt = Math.min((time - lastTime) / 1000, 0.08);
+      const rawDt = Math.min((time - lastTime) / 1000, 0.08);
+      const dt = reduceMotion ? 0 : rawDt;
       lastTime = time;
 
       const rect = canvas.getBoundingClientRect();
@@ -497,7 +580,7 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
       ctx.save();
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      // 1. Matte Oscilloscope Display Well
+      // 1. Matte CRT Oscilloscope Display Well
       ctx.fillStyle = INK.bg;
       ctx.fillRect(0, 0, width, height);
 
@@ -520,21 +603,19 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
       }
       ctx.stroke();
 
-      ctx.globalAlpha = 1;
+      drawBezelFiducials(width, height, cx, cy);
 
       if (!interval) {
         // Center crosshair
         ctx.strokeStyle = INK.axis;
-        ctx.globalAlpha = 1;
         ctx.beginPath();
         ctx.moveTo(cx - 14, cy);
         ctx.lineTo(cx + 14, cy);
         ctx.moveTo(cx, cy - 14);
         ctx.lineTo(cx, cy + 14);
         ctx.stroke();
-        ctx.globalAlpha = 1;
 
-        // Quiet standby carrier wave (no text clutter)
+        // Quiet standby carrier wave
         phaseRef.current = (phaseRef.current + 1.4 * dt) % (Math.PI * 2);
         ctx.beginPath();
         for (let x = 18; x <= width - 18; x++) {
@@ -544,8 +625,8 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
           if (x === 18) ctx.moveTo(x, y);
           else ctx.lineTo(x, y);
         }
-        ctx.strokeStyle = "rgba(163, 174, 191, 0.45)";
-        ctx.lineWidth = 1.3;
+        ctx.strokeStyle = "rgba(181, 175, 160, 0.45)";
+        ctx.lineWidth = 1.35;
         ctx.stroke();
 
         ctx.restore();
@@ -553,19 +634,17 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         return;
       }
 
-      const mainColor = COLORS[interval.bucket] || "#22d3ee";
+      const mainColor = COLORS[interval.bucket] || COLORS.perfect;
 
       if (interval.type === "interval") {
         // --- LISSAJOUS PREVIEW (2 NOTES) ---
         ctx.strokeStyle = INK.axis;
-        ctx.globalAlpha = 1;
         ctx.beginPath();
         ctx.moveTo(0, cy);
         ctx.lineTo(width, cy);
         ctx.moveTo(cx, 0);
         ctx.lineTo(cx, height);
         ctx.stroke();
-        ctx.globalAlpha = 1;
 
         const [p1, p2] = interval.pitches;
         const diff = Math.abs(p2 - p1);
@@ -604,13 +683,13 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         }
 
         ctx.strokeStyle = mainColor;
-        ctx.lineWidth = 1.8;
+        ctx.lineWidth = 1.85;
         ctx.lineJoin = "round";
         ctx.stroke();
 
         const beamX = cx + Math.cos(phi) * rx;
         const beamY = cy - Math.sin(0) * ry;
-        ctx.fillStyle = "#ffffff";
+        ctx.fillStyle = INK.t1;
         ctx.strokeStyle = INK.bg;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
@@ -618,7 +697,6 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         ctx.fill();
         ctx.stroke();
 
-        // Captions sit in the corners, set in the UI face at a readable size
         ctx.strokeStyle = INK.axis;
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -686,7 +764,7 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
           ctx.closePath();
 
           ctx.fillStyle = mainColor;
-          ctx.globalAlpha = 0.04;
+          ctx.globalAlpha = 0.045;
           ctx.fill();
 
           ctx.strokeStyle = mainColor;
@@ -722,7 +800,7 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
             ctx.beginPath();
             ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
             ctx.lineTo(trail[i].x, trail[i].y);
-            ctx.strokeStyle = "#ffffff";
+            ctx.strokeStyle = INK.t1;
             ctx.globalAlpha = alpha;
             ctx.lineWidth = 1.8;
             ctx.stroke();
@@ -746,7 +824,7 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         ctx.lineCap = "round";
         ctx.lineJoin = "round";
 
-        ctx.strokeStyle = "rgba(9, 12, 18, 0.9)";
+        ctx.strokeStyle = "rgba(8, 10, 8, 0.9)";
         ctx.lineWidth = 3.8;
         ctx.beginPath();
         ctx.moveTo(joints[0].x, joints[0].y);
@@ -763,7 +841,7 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         ctx.stroke();
 
         if (N > 1) {
-          ctx.strokeStyle = "#b4bfd0";
+          ctx.strokeStyle = INK.t2;
           ctx.lineWidth = 1.75;
           ctx.beginPath();
           ctx.moveTo(joints[1].x, joints[1].y);
@@ -781,8 +859,8 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
           const isBassAnchor = i === 1;
 
           if (isTip) {
-            ctx.fillStyle = "#ffffff";
-            ctx.strokeStyle = "#04070e";
+            ctx.fillStyle = INK.t1;
+            ctx.strokeStyle = INK.bg;
             ctx.lineWidth = 1.5;
             ctx.beginPath();
             ctx.arc(j.x, j.y, 3.2, 0, Math.PI * 2);
@@ -796,15 +874,15 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
             ctx.stroke();
           } else if (isBassAnchor) {
             ctx.fillStyle = INK.t1;
-            ctx.strokeStyle = "#04070e";
+            ctx.strokeStyle = INK.bg;
             ctx.lineWidth = 1.3;
             ctx.beginPath();
             ctx.arc(j.x, j.y, 2.6, 0, Math.PI * 2);
             ctx.fill();
             ctx.stroke();
           } else {
-            ctx.fillStyle = isOrigin ? "#64748b" : "#f8fafc";
-            ctx.strokeStyle = "#04070e";
+            ctx.fillStyle = isOrigin ? INK.t3 : INK.t1;
+            ctx.strokeStyle = INK.bg;
             ctx.lineWidth = 1.1;
             ctx.beginPath();
             ctx.arc(j.x, j.y, 2.2, 0, Math.PI * 2);
@@ -813,7 +891,6 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
           }
         }
 
-        // Captions sit in the corners, set in the UI face at a readable size
         const deltaLabels = pitches.map(
           p => `${noteName(p)}(${getDeltaFractionLabel(p - bass)})`
         );
@@ -899,7 +976,11 @@ export default function NeonSynthPad() {
   const [bindingError, setBindingError] = useState<string | null>(null);
   const [hideDisabled, setHideDisabled] = useState(false);
   const [viewMode, setViewMode] = useState<"pad" | "roll">(
-    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("view") === "roll" ? "roll" : "pad"
+    () =>
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("view") === "roll"
+        ? "roll"
+        : "pad"
   );
   const [editTool, setEditTool] = useState<"draw" | "select" | "chord">("draw");
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -943,7 +1024,10 @@ export default function NeonSynthPad() {
   const [autoScroll, setAutoScroll] = useState(true);
   const [isTouchDevice, setIsTouchDevice] = useState(false);
   const [hasInteracted, setHasInteracted] = useState(
-    () => typeof window !== "undefined" && (new URLSearchParams(window.location.search).has("test") || new URLSearchParams(window.location.search).has("preview"))
+    () =>
+      typeof window !== "undefined" &&
+      (new URLSearchParams(window.location.search).has("test") ||
+        new URLSearchParams(window.location.search).has("preview"))
   );
   const [midiStatus, setMidiStatus] = useState<
     "unsupported" | "locked" | "connected" | "disconnected"
@@ -1922,7 +2006,6 @@ export default function NeonSynthPad() {
 
   const cellHover = hoveredCell && hoveredCell.note >= 0 ? hoveredCell : null;
 
-
   const sortedIntervalPitches = interval
     ? [...interval.pitches].sort((a, b) => a - b)
     : [];
@@ -1944,16 +2027,16 @@ export default function NeonSynthPad() {
           }}
           tabIndex={0}
           autoFocus
-          className="fixed inset-0 z-[100] bg-[#05070b]/95 flex items-center justify-center cursor-pointer"
+          className="fixed inset-0 z-[100] bg-[#080a08]/95 flex items-center justify-center cursor-pointer"
         >
           <div className="panel w-full max-w-[30rem] mx-4 p-6">
             <h1
               id="audio-init-title"
-              className="text-[22px] font-semibold leading-tight tracking-[-0.01em] text-t1 text-balance"
+              className="text-[22px] font-semibold leading-tight tracking-[-0.015em] text-t1 text-balance"
             >
               Consonance Synthesizer &amp; Vector Scope
             </h1>
-            <p className="mt-2 text-sm leading-relaxed text-t2">
+            <p className="mt-2.5 max-w-[52ch] text-sm leading-relaxed text-t2">
               Play two or more notes and the scope shows how they relate: the interval or chord,
               how consonant it is, and the shape it traces.
             </p>
@@ -1965,7 +2048,7 @@ export default function NeonSynthPad() {
               className="btn btn-primary mt-6 w-full !h-11 !px-4 !text-sm justify-between"
             >
               <span>Start audio</span>
-              <span className="text-xs font-medium opacity-60">Press Enter</span>
+              <span className="mono text-xs font-medium opacity-70">Press Enter</span>
             </button>
           </div>
         </div>
@@ -1981,12 +2064,12 @@ export default function NeonSynthPad() {
                 {interval ? (
                   <>
                     <div
-                      className="truncate text-[34px] font-semibold leading-[1.05] tracking-[-0.025em] text-t1"
+                      className="truncate text-[32px] font-semibold leading-[1.05] tracking-[-0.02em] text-t1"
                       title={interval.name}
                     >
                       {interval.name}
                     </div>
-                    <div className="mt-2 flex items-baseline gap-3 text-[13px] text-t2">
+                    <div className="mt-2 flex items-baseline gap-2.5 text-[12.5px] text-t2">
                       {interval.type === "chord" ? (
                         <span>{interval.diff} voices</span>
                       ) : (
@@ -2012,13 +2095,13 @@ export default function NeonSynthPad() {
                         </span>
                       ))}
                       {sortedIntervalPitches.length > 8 && (
-                        <span className="text-xs text-t3">+{sortedIntervalPitches.length - 8}</span>
+                        <span className="mono text-xs text-t3">+{sortedIntervalPitches.length - 8}</span>
                       )}
                     </div>
                   </>
                 ) : (
                   <>
-                    <div className="text-[34px] font-semibold leading-[1.05] tracking-[-0.025em] text-t3">
+                    <div className="text-[32px] font-semibold leading-[1.05] tracking-[-0.02em] text-t3">
                       Standby
                     </div>
                     <div className="mt-2 text-[13px] text-t3">Play 2+ notes to analyze</div>
@@ -2035,7 +2118,12 @@ export default function NeonSynthPad() {
                   {interval && <ConsonanceGlyph bucket={interval.bucket} size={16} />}
                   {interval ? interval.consonance : "Idle"}
                 </span>
-                {activeNotes.size > 0 && <span className="text-xs text-t2">Live</span>}
+                {activeNotes.size > 0 && (
+                  <span className="mono inline-flex items-center gap-1.5 text-[11px] font-medium text-t2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#f2efe6]" aria-hidden="true" />
+                    Live
+                  </span>
+                )}
               </div>
             </div>
 
@@ -2070,9 +2158,9 @@ export default function NeonSynthPad() {
               className="transport max-md:h-12 max-md:w-full max-md:flex-row max-md:gap-3"
             >
               {isPlaying ? (
-                <Square size={22} fill="currentColor" />
+                <Square size={20} fill="currentColor" />
               ) : (
-                <Play size={22} fill="currentColor" />
+                <Play size={20} fill="currentColor" />
               )}
               <span>{isPlaying ? "Stop" : "Play"}</span>
             </button>
@@ -2325,7 +2413,7 @@ export default function NeonSynthPad() {
         </section>
       </header>
 
-      {/* MAIN INSTRUMENT WORKSPACE — Zero Eyebrow Headers, Full Vertical Stature */}
+      {/* MAIN INSTRUMENT WORKSPACE */}
       <main className="flex-1 w-full max-w-[1720px] mx-auto flex flex-col min-h-[460px] max-md:order-2 md:min-h-0">
         {viewMode === "pad" ? (() => {
           const renderedPads = Array.from({ length: numNotes })
@@ -2343,7 +2431,7 @@ export default function NeonSynthPad() {
           });
           const dense = renderedPads.length > 36;
           // Naturals start a little lower, so the raised accidentals carry the
-          // piano's 2 + 3 rhythm by shape alone, without a second surface colour.
+          // piano's 2 + 3 rhythm by physical profile.
           const accidentalDrop = dense ? 14 : 24;
 
           const renderPad = (i: number, col: number) => {
@@ -2362,16 +2450,20 @@ export default function NeonSynthPad() {
             const type = getHarmonicTypeForSet(i, activeIndices);
             const displayColor = COLORS[type as keyof typeof COLORS] || COLORS.neutral;
 
-            // Glyph, note name and keycap share one column at the base of the pad,
-            // so each row reads straight across all pads.
             const glyphSize = Math.max(16, Math.min(24, 420 / numNotes));
             const hasRelation = activeIndices.length > 0 && !isDisabled && type !== "neutral";
 
-            const padBg = isDisabled ? "transparent" : "#111721";
+            // Accidentals have a slightly deeper anodized key finish than naturals
+            // while remaining 100% neutral so colour is still strictly consonance data.
+            const padBg = isDisabled
+              ? "transparent"
+              : accidental
+              ? "#111411"
+              : "#181c18";
             const padTint = !hasRelation
               ? "transparent"
               : isActive
-              ? `${displayColor}3c`
+              ? `${displayColor}3d`
               : `${displayColor}14`;
             const padRing = isBinding
               ? `inset 0 0 0 2px ${INK.t1}`
@@ -2436,10 +2528,24 @@ export default function NeonSynthPad() {
                     marginTop: accidental ? 0 : accidentalDrop,
                   } as React.CSSProperties
                 }
-                className={`pad group min-w-0 focus:z-30 ${
-                  isBinding ? "z-20" : ""
-                }`}
+                className={`pad group min-w-0 focus:z-30 ${isBinding ? "z-20" : ""}`}
               >
+                {/* Top hardware LED bar indicating active voice or harmonic relation */}
+                {!isDisabled && (
+                  <div
+                    aria-hidden="true"
+                    style={{
+                      backgroundColor: isActive
+                        ? displayColor
+                        : hasRelation
+                        ? displayColor
+                        : "rgba(218, 210, 190, 0.14)",
+                      opacity: isActive ? 1 : hasRelation ? 0.55 : 0.4,
+                    }}
+                    className="pointer-events-none absolute left-2 right-2 top-2 h-[2px] rounded-full transition-opacity"
+                  />
+                )}
+
                 <div
                   className={`pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center pb-3 ${
                     dense ? "gap-1.5 px-0" : "gap-2 px-1"
@@ -2469,21 +2575,21 @@ export default function NeonSynthPad() {
                         className={`rounded-[3px] px-1.5 py-1 text-[11px] font-medium leading-tight text-balance ${
                           bindingError
                             ? "border border-white/30 text-t1"
-                            : "bg-[#e9eef6] text-[#0b0f16]"
+                            : "bg-[#f2efe6] text-[#0b0d0b]"
                         }`}
                       >
                         {bindingError || "Press a key"}
                       </span>
-                      <span className="text-[11px] font-medium uppercase text-t2">
+                      <span className="mono text-[11px] font-medium uppercase text-t2">
                         {keyBindings[i]?.join(" ")}
                       </span>
                     </div>
                   ) : (
                     <span
                       className={`keycap ${isDisabled ? "normal-case" : "uppercase"} ${
-                        dense ? "!min-w-0 !border-0 !bg-transparent !px-0 !text-[11px]" : ""
-                      } ${isActive ? "!border-[#e9eef6] !text-[#e9eef6]" : ""} ${
-                        isDisabled ? "!border-transparent !bg-transparent !text-[#7b879b]" : ""
+                        dense ? "!min-w-0 !border-0 !bg-transparent !px-0 !text-[11px] !shadow-none" : ""
+                      } ${isActive ? "!border-[#f2efe6] !text-[#f2efe6]" : ""} ${
+                        isDisabled ? "!border-transparent !bg-transparent !text-[#878174] !shadow-none" : ""
                       }`}
                     >
                       {isDisabled ? "Off" : keyBindings[i]?.join(" ")}
@@ -2529,7 +2635,7 @@ export default function NeonSynthPad() {
                         className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap"
                         style={{ gridRow: 1, gridColumn: `${g.start + 1} / span ${g.count}` }}
                       >
-                        <span className="mono text-[11px] leading-none text-t3">
+                        <span className="mono text-[11px] font-medium leading-none text-t2">
                           C{octave + g.octave}
                         </span>
                         <span className="mt-[5px] h-[5px] min-w-0 flex-1 rounded-tr-[2px] border-r border-t border-[color:var(--line-2)]" />
@@ -2542,11 +2648,11 @@ export default function NeonSynthPad() {
             </div>
           );
         })() : (
-          /* SEQUENCER PIANO ROLL VIEW — No Top Eyebrow Bar, Direct Grid Access */
+          /* SEQUENCER PIANO ROLL VIEW */
           <div className="panel overflow-hidden flex flex-col flex-1 min-h-0">
             <div className="flex-1 flex flex-col overflow-hidden min-h-0">
               <div
-                className="flex-1 overflow-auto bg-[#090c12]"
+                className="flex-1 overflow-auto bg-[#080a08]"
                 ref={scrollRef}
                 onScroll={updateViewport}
                 onMouseLeave={() => setHoveredCell(null)}
@@ -2598,7 +2704,7 @@ export default function NeonSynthPad() {
                         height: `${(Math.abs(selectionRect.n2 - selectionRect.n1) + 1) * rowHeight}px`,
                         zIndex: 40,
                       }}
-                      className="absolute bg-white/[0.08] border border-white/70 pointer-events-none rounded-[2px]"
+                      className="absolute bg-[#f2efe6]/[0.08] border border-[#f2efe6]/70 pointer-events-none rounded-[2px]"
                     />
                   )}
 
@@ -2615,25 +2721,29 @@ export default function NeonSynthPad() {
                         key={noteIdx}
                         style={{ height: `${rowHeight}px` }}
                         className={`flex border-b ${
-                          isRootC ? "border-white/[0.13]" : "border-white/[0.05]"
+                          isRootC ? "border-[#dad2be]/[0.16]" : "border-[#dad2be]/[0.055]"
                         } group shrink-0 ${
-                          "bg-[#0c111a]"
+                          accidental ? "bg-[#0b0d0b]" : "bg-[#0e110e]"
                         } ${isDisabled ? "opacity-25 grayscale pointer-events-none" : ""}`}
                       >
                         {/* Sticky Piano Key Label */}
                         <div
-                          className={`sticky left-0 w-[52px] h-full flex items-center gap-0.5 px-2 ${accidental ? "pl-4" : ""} text-xs font-medium border-r border-white/[0.1] z-50 shrink-0 transition-colors ${
+                          className={`sticky left-0 w-[52px] h-full flex items-center gap-0.5 px-2 ${
+                            accidental ? "pl-3.5" : ""
+                          } mono text-[11px] font-medium border-r border-[#dad2be]/[0.12] z-50 shrink-0 transition-colors ${
                             isNoteSounding
-                              ? "bg-[#1e2633] text-white"
+                              ? "bg-[#262b25] text-t1"
                               : isRootC
-                              ? "bg-[#131a25] text-t1"
-                              : "bg-[#0d121b] text-t2"
-                          } group-hover:text-white`}
-                          style={isNoteSounding ? { boxShadow: "inset 2px 0 0 #e9eef6" } : undefined}
+                              ? "bg-[#171b17] text-t1"
+                              : accidental
+                              ? "bg-[#0a0c0a] text-t3"
+                              : "bg-[#111411] text-t2"
+                          } group-hover:text-t1`}
+                          style={isNoteSounding ? { boxShadow: "inset 2px 0 0 #f2efe6" } : undefined}
                         >
                           <span>{getNoteName(noteIdx)}</span>
                           {isRootC && (
-                            <span className="text-[11px] font-normal text-t2">
+                            <span className="text-[10.5px] font-normal text-t2">
                               {noteOct}
                             </span>
                           )}
@@ -2797,31 +2907,31 @@ export default function NeonSynthPad() {
                                 style={{ width: `${effectiveStepWidth}px` }}
                                 className={`flex-shrink-0 border-r ${
                                   isBarStart
-                                    ? "border-r-white/[0.2]"
+                                    ? "border-r-[#dad2be]/[0.22]"
                                     : isBeatStart
-                                    ? "border-r-white/[0.1]"
-                                    : "border-r-white/[0.045]"
+                                    ? "border-r-[#dad2be]/[0.11]"
+                                    : "border-r-[#dad2be]/[0.045]"
                                 } cursor-pointer relative overflow-visible ${
                                   isCurrent
-                                    ? "bg-white/[0.06]"
+                                    ? "bg-[#f2efe6]/[0.06]"
                                     : pasteAnchor === stepIdx
-                                    ? "bg-white/[0.03]"
+                                    ? "bg-[#f2efe6]/[0.03]"
                                     : isAltBeatGroup
-                                    ? "bg-white/[0.012]"
+                                    ? "bg-[#f2efe6]/[0.012]"
                                     : ""
-                                } ${!isTouchDevice ? "hover:bg-white/[0.05]" : ""}`}
+                                } ${!isTouchDevice ? "hover:bg-[#f2efe6]/[0.05]" : ""}`}
                               >
                                 {isCurrent && (
-                                  <div className="absolute inset-y-0 left-0 w-[1.5px] bg-white/40 pointer-events-none z-20" />
+                                  <div className="absolute inset-y-0 left-0 w-[1.5px] bg-[#f2efe6]/45 pointer-events-none z-20" />
                                 )}
                                 {pasteAnchor === stepIdx && (
-                                  <div className="absolute inset-y-0 left-0 w-[1px] bg-white/30 pointer-events-none z-0" />
+                                  <div className="absolute inset-y-0 left-0 w-[1px] bg-[#f2efe6]/30 pointer-events-none z-0" />
                                 )}
                                 {propagationHintColor && (
                                   <div
                                     style={{
                                       background: propagationHintColor,
-                                      opacity: 0.07,
+                                      opacity: 0.075,
                                       zIndex: 1,
                                       left: isPropagationStart ? "3px" : "-1px",
                                       borderTopLeftRadius: isPropagationStart ? "2px" : "0px",
@@ -2843,7 +2953,7 @@ export default function NeonSynthPad() {
                                     return t < 0 ? null : (
                                       <div
                                         style={{
-                                          backgroundColor: "#e9eef6",
+                                          backgroundColor: "#f2efe6",
                                           opacity: 0.22,
                                           left: `${dragDelta.ds * effectiveStepWidth}px`,
                                           bottom: `${(t - renderedIdx) * rowHeight}px`,
@@ -2851,7 +2961,7 @@ export default function NeonSynthPad() {
                                           height: `${rowHeight - 2}px`,
                                           zIndex: 40,
                                         }}
-                                        className="absolute pointer-events-none rounded-[3px] ring-1 ring-white/70"
+                                        className="absolute pointer-events-none rounded-[3px] ring-1 ring-[#f2efe6]/70"
                                       />
                                     );
                                   })()}
@@ -2861,10 +2971,10 @@ export default function NeonSynthPad() {
                                     <div
                                       style={{
                                         backgroundColor: isSelected
-                                          ? "#3d4757"
+                                          ? "#3d433b"
                                           : isChord
-                                          ? "#151b25"
-                                          : "#2b3340",
+                                          ? "#171a17"
+                                          : "#2a2f29",
                                         left: hasPrev ? "-1px" : "2px",
                                         right: hasNext ? "-1px" : "3px",
                                         zIndex: 5,
@@ -2873,10 +2983,10 @@ export default function NeonSynthPad() {
                                         borderTopRightRadius: hasNext ? 0 : "3px",
                                         borderBottomRightRadius: hasNext ? 0 : "3px",
                                         border: isSelected
-                                          ? "1px solid #e9eef6"
+                                          ? "1px solid #f2efe6"
                                           : isChord
-                                          ? "1px dashed rgba(226,232,240,0.4)"
-                                          : "1px solid rgba(226,232,240,0.26)",
+                                          ? "1px dashed rgba(242, 239, 230, 0.4)"
+                                          : "1px solid rgba(242, 239, 230, 0.28)",
                                         opacity: isChord ? 0.85 : 1,
                                       }}
                                       className="absolute top-1 bottom-1"
@@ -2905,7 +3015,7 @@ export default function NeonSynthPad() {
                                         className="absolute top-1 bottom-1 rounded-l-sm"
                                       >
                                         {stepIdx === stepMetadata.firstStepWithNotes && (
-                                          <div className="absolute inset-y-0 left-0 w-[1.5px] bg-white" />
+                                          <div className="absolute inset-y-0 left-0 w-[1.5px] bg-[#f2efe6]" />
                                         )}
                                       </div>
                                     )}
@@ -2915,13 +3025,13 @@ export default function NeonSynthPad() {
                                   <>
                                     <div
                                       style={{
-                                        backgroundColor: "#161c27",
+                                        backgroundColor: "#1c201c",
                                         left: "2px",
                                         right: "3px",
                                         borderRadius: "3px",
                                         zIndex: 5,
                                       }}
-                                      className="absolute top-1 bottom-1 border border-white/10"
+                                      className="absolute top-1 bottom-1 border border-[#f2efe6]/15"
                                     />
                                     <div
                                       style={{
@@ -2954,8 +3064,8 @@ export default function NeonSynthPad() {
                   })}
 
                   {/* Sticky step ruler (h-8 = 32px; the hover maths above assumes this) */}
-                  <div className="h-8 border-b border-white/[0.1] flex bg-[#0d1118] z-[100] sticky top-0 shrink-0">
-                    <div className="w-[52px] border-r border-white/[0.1] shrink-0 bg-[#0d1118] sticky left-0 z-[110] flex items-center justify-center text-[11px] font-medium text-t3">
+                  <div className="h-8 border-b border-[#dad2be]/[0.12] flex bg-[#131613] z-[100] sticky top-0 shrink-0">
+                    <div className="w-[52px] border-r border-[#dad2be]/[0.12] shrink-0 bg-[#131613] sticky left-0 z-[110] flex items-center justify-center text-[11px] font-medium text-t3">
                       Step
                     </div>
                     {Array.from({ length: numSteps }).map((_, i) => {
@@ -2977,21 +3087,21 @@ export default function NeonSynthPad() {
                           }
                           onMouseLeave={() => !isTouchDevice && setHoveredCell(null)}
                           style={{ width: `${effectiveStepWidth}px` }}
-                          className={`flex-shrink-0 h-full flex items-center justify-center text-[11px] font-medium border-r ${
+                          className={`mono flex-shrink-0 h-full flex items-center justify-center text-[11px] font-medium border-r ${
                             isBar
-                              ? "border-r-white/[0.2]"
+                              ? "border-r-[#dad2be]/[0.22]"
                               : isBeat
-                              ? "border-r-white/[0.1]"
-                              : "border-r-white/[0.045]"
+                              ? "border-r-[#dad2be]/[0.11]"
+                              : "border-r-[#dad2be]/[0.045]"
                           } transition-colors cursor-pointer relative ${
                             currentStep === i
-                              ? "bg-white/10 text-t1 font-semibold"
+                              ? "bg-[#f2efe6]/12 text-t1 font-semibold"
                               : pasteAnchor === i
-                              ? "bg-white/[0.05] text-t1"
+                              ? "bg-[#f2efe6]/[0.05] text-t1"
                               : hoveredCell?.step === i
-                              ? "text-t1 bg-white/5"
+                              ? "text-t1 bg-[#f2efe6]/5"
                               : isBar
-                              ? "text-t1 bg-white/[0.03]"
+                              ? "text-t1 bg-[#f2efe6]/[0.03]"
                               : isBeat
                               ? "text-t2"
                               : "text-t3"
@@ -2999,10 +3109,10 @@ export default function NeonSynthPad() {
                         >
                           {i + 1}
                           {currentStep === i && (
-                            <div className="absolute inset-x-0 bottom-0 h-0.5 bg-[#e9eef6]" />
+                            <div className="absolute inset-x-0 bottom-0 h-0.5 bg-[#f2efe6]" />
                           )}
                           {pasteAnchor === i && currentStep !== i && (
-                            <div className="absolute inset-x-0 bottom-0 h-0.5 bg-white/40" />
+                            <div className="absolute inset-x-0 bottom-0 h-0.5 bg-[#f2efe6]/40" />
                           )}
                         </div>
                       );
@@ -3012,7 +3122,7 @@ export default function NeonSynthPad() {
               </div>
 
               {/* Sequencer footer: pattern length, zoom, tempo, follow. Chord level sits at the far end. */}
-              <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-[#0d1118] border-t border-white/[0.1] z-40 shrink-0">
+              <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-[#131613] border-t border-[#dad2be]/[0.12] z-40 shrink-0">
                 <Stepper
                   label="Steps"
                   display={numSteps}
@@ -3091,11 +3201,11 @@ export default function NeonSynthPad() {
                   aria-label="Colour marks use the consonance colours: left bar is motion from the previous step, line is the relation within the chord, glyph is the relation after the last note"
                 >
                   <span className="flex items-center gap-1.5">
-                    <span className="h-3 w-[3px] rounded-sm bg-[#a3aebf]" aria-hidden="true" />
+                    <span className="h-3 w-[3px] rounded-sm bg-[#b5afa0]" aria-hidden="true" />
                     Motion from previous step
                   </span>
                   <span className="flex items-center gap-1.5">
-                    <span className="h-[2px] w-4 rounded-full bg-[#a3aebf]" aria-hidden="true" />
+                    <span className="h-[2px] w-4 rounded-full bg-[#b5afa0]" aria-hidden="true" />
                     Within chord
                   </span>
                   <span className="flex items-center gap-1.5">

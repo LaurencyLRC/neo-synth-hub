@@ -375,7 +375,7 @@ const ConsonanceGlyph: React.FC<{
     <svg width={size} height={size} viewBox="0 0 24 24" className="shrink-0" aria-hidden="true">
       {bucket === "perfect" && <path d="M12 2.5 21.5 12 12 21.5 2.5 12Z" {...outline} />}
       {bucket === "consonant" && <circle cx="12" cy="12" r="9" {...outline} />}
-      {bucket === "slightly" && <path d="M12 2 21.5 18H2.5Z" {...outline} />}
+      {bucket === "slightly" && <path d="M12 2 22 20H2Z" {...outline} />}
       {bucket === "dissonant" && (
         <path d="M5.5 5.5 18.5 18.5M18.5 5.5 5.5 18.5" fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" />
       )}
@@ -1928,7 +1928,7 @@ export default function NeonSynthPad() {
     : [];
 
   return (
-    <div className="flex flex-col h-screen w-screen text-t1 p-4 gap-4 select-none overflow-hidden">
+    <div className="flex h-[100dvh] w-screen flex-col gap-3 overflow-y-auto overflow-x-hidden p-3 text-t1 select-none md:h-screen md:gap-4 md:overflow-hidden md:p-4">
       {/* Audio start dialog */}
       {!hasInteracted && (
         <div
@@ -1972,11 +1972,11 @@ export default function NeonSynthPad() {
       )}
 
       {/* Header: two panels on the same two-row grid, so their dividers line up */}
-      <header className="w-full max-w-[1720px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-4 shrink-0 z-30">
+      <header className="w-full max-w-[1720px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4 shrink-0 z-30 max-md:contents">
         {/* Left: harmonic readout, vector scope, legend */}
-        <section aria-label="Harmonic readout" className="panel p-3 flex flex-col">
-          <div className="flex gap-3 h-[152px]">
-            <div className="flex w-[232px] shrink-0 min-w-0 flex-col justify-between">
+        <section aria-label="Harmonic readout" className="panel p-3 flex flex-col max-md:order-1">
+          <div className="flex flex-col gap-3 md:h-[152px] md:flex-row">
+            <div className="flex min-w-0 flex-col justify-between gap-4 md:w-[232px] md:shrink-0 md:gap-0">
               <div className="min-w-0">
                 {interval ? (
                   <>
@@ -2039,12 +2039,12 @@ export default function NeonSynthPad() {
               </div>
             </div>
 
-            <div className="well relative min-w-0 flex-1 overflow-hidden">
+            <div className="well relative h-32 min-w-0 overflow-hidden md:h-auto md:flex-1">
               <HarmonicVisualizer interval={interval} />
             </div>
           </div>
 
-          <div className="mt-3 -mx-3 flex min-h-[28px] flex-wrap items-center gap-x-5 gap-y-1.5 border-t rule px-3 pt-3 box-content">
+          <div className="mt-3 -mx-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t rule px-3 pt-3 box-content md:flex md:min-h-[28px] md:flex-wrap md:items-center md:gap-x-5 md:gap-y-1.5">
             {LEGEND.map(({ bucket, label, hint }) => (
               <span
                 key={bucket}
@@ -2059,15 +2059,15 @@ export default function NeonSynthPad() {
         </section>
 
         {/* Right: transport, encoders, waveform, then view and file controls */}
-        <section aria-label="Controls" className="panel p-3 flex flex-col">
-          <div className="flex gap-3 h-[152px]">
+        <section aria-label="Controls" className="panel p-3 flex flex-col max-md:order-3">
+          <div className="flex flex-col gap-3 md:h-[152px] md:flex-row">
             <button
               type="button"
               onClick={() => setIsPlaying(!isPlaying)}
               data-playing={isPlaying}
               aria-label={isPlaying ? "Stop sequence playback" : "Start sequence playback"}
               title="Play or stop (Space)"
-              className="transport"
+              className="transport max-md:h-12 max-md:w-full max-md:flex-row max-md:gap-3"
             >
               {isPlaying ? (
                 <Square size={22} fill="currentColor" />
@@ -2077,7 +2077,7 @@ export default function NeonSynthPad() {
               <span>{isPlaying ? "Stop" : "Play"}</span>
             </button>
 
-            <div className="well grid min-w-0 flex-1 grid-cols-3 cols-rule">
+            <div className="well grid min-w-0 grid-cols-3 cols-rule max-md:py-3 md:flex-1">
               <EncoderCell
                 label="BPM"
                 display={String(bpm)}
@@ -2125,7 +2125,7 @@ export default function NeonSynthPad() {
             <div
               role="radiogroup"
               aria-label="Waveform"
-              className="well grid w-[136px] shrink-0 grid-cols-2 gap-1 p-1"
+              className="well grid grid-cols-4 gap-1 p-1 md:w-[136px] md:shrink-0 md:grid-cols-2"
             >
               {WAVES.map(t => (
                 <button
@@ -2136,7 +2136,7 @@ export default function NeonSynthPad() {
                   aria-label={WAVE_FULL[t]}
                   title={WAVE_FULL[t]}
                   onClick={() => setWaveType(t)}
-                  className="wave"
+                  className="wave max-md:py-2"
                 >
                   <WaveGlyph type={t} />
                   <span>{WAVE_SHORT[t]}</span>
@@ -2147,12 +2147,12 @@ export default function NeonSynthPad() {
 
           <div className="mt-3 -mx-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t rule px-3 pt-3 box-content">
             <div className="flex flex-wrap items-center gap-2">
-              <div className="seg" role="group" aria-label="Surface">
+              <div className="seg max-md:w-full" role="group" aria-label="Surface">
                 <button
                   type="button"
                   onClick={() => setViewMode("pad")}
                   aria-pressed={viewMode === "pad"}
-                  className="seg-item"
+                  className="seg-item max-md:flex-1"
                   title="Harmonic pad view"
                 >
                   Pads
@@ -2161,7 +2161,7 @@ export default function NeonSynthPad() {
                   type="button"
                   onClick={() => setViewMode("roll")}
                   aria-pressed={viewMode === "roll"}
-                  className="seg-item"
+                  className="seg-item max-md:flex-1"
                   title="Piano roll sequencer"
                 >
                   Sequencer
@@ -2175,7 +2175,7 @@ export default function NeonSynthPad() {
                     onClick={() => setHideDisabled(!hideDisabled)}
                     aria-pressed={hideDisabled}
                     aria-label="Hide muted pads"
-                    className="btn"
+                    className="btn max-md:flex-1"
                     title={hideDisabled ? "Show muted pads" : "Hide muted pads"}
                   >
                     {hideDisabled ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -2191,7 +2191,7 @@ export default function NeonSynthPad() {
                     aria-label={
                       editMode ? "Exit key binding mode" : "Configure key bindings and mute pads"
                     }
-                    className="btn"
+                    className="btn max-md:flex-1"
                     title="Configure key bindings and mute pads"
                   >
                     <Settings2 size={14} />
@@ -2291,7 +2291,7 @@ export default function NeonSynthPad() {
                 title="Export sequence as JSON"
               >
                 <Download size={14} />
-                <span className="hidden 2xl:inline">Export</span>
+                <span className="hidden max-md:inline 2xl:inline">Export</span>
               </button>
               <label
                 aria-label="Import sequence from JSON file"
@@ -2299,7 +2299,7 @@ export default function NeonSynthPad() {
                 title="Import sequence from JSON"
               >
                 <Upload size={14} />
-                <span className="hidden 2xl:inline">Import</span>
+                <span className="hidden max-md:inline 2xl:inline">Import</span>
                 <input type="file" accept=".json" onChange={importSequence} className="sr-only" />
               </label>
               <div
@@ -2310,7 +2310,7 @@ export default function NeonSynthPad() {
               >
                 <Radio size={14} />
                 <span>MIDI</span>
-                <span className="hidden 2xl:inline text-t3">
+                <span className="hidden max-md:inline 2xl:inline text-t3">
                   {midiStatus === "connected"
                     ? "Connected"
                     : midiStatus === "disconnected"
@@ -2326,7 +2326,7 @@ export default function NeonSynthPad() {
       </header>
 
       {/* MAIN INSTRUMENT WORKSPACE — Zero Eyebrow Headers, Full Vertical Stature */}
-      <main className="flex-1 w-full max-w-[1720px] mx-auto flex flex-col min-h-0">
+      <main className="flex-1 w-full max-w-[1720px] mx-auto flex flex-col min-h-[460px] max-md:order-2 md:min-h-0">
         {viewMode === "pad" ? (() => {
           const renderedPads = Array.from({ length: numNotes })
             .map((_, i) => i)
@@ -2617,12 +2617,12 @@ export default function NeonSynthPad() {
                         className={`flex border-b ${
                           isRootC ? "border-white/[0.13]" : "border-white/[0.05]"
                         } group shrink-0 ${
-                          accidental ? "bg-[#0a0e15]" : "bg-[#0c111a]"
+                          "bg-[#0c111a]"
                         } ${isDisabled ? "opacity-25 grayscale pointer-events-none" : ""}`}
                       >
                         {/* Sticky Piano Key Label */}
                         <div
-                          className={`sticky left-0 w-[52px] h-full flex items-center gap-0.5 px-2 text-xs font-medium border-r border-white/[0.1] z-50 shrink-0 transition-colors ${
+                          className={`sticky left-0 w-[52px] h-full flex items-center gap-0.5 px-2 ${accidental ? "pl-4" : ""} text-xs font-medium border-r border-white/[0.1] z-50 shrink-0 transition-colors ${
                             isNoteSounding
                               ? "bg-[#1e2633] text-white"
                               : isRootC
@@ -2669,6 +2669,7 @@ export default function NeonSynthPad() {
                             let isHeaderIntercepted = false;
 
                             let propagationHintColor = null;
+                            let propagationBucket: keyof typeof COLORS | null = null;
                             let isPropagationStart = false;
                             if (
                               stepMetadata.absoluteLastStep !== -1 &&
@@ -2678,6 +2679,7 @@ export default function NeonSynthPad() {
                                 stepMetadata.bassAtStep[stepMetadata.absoluteLastStep];
                               const type = getConsonanceType(noteIdx - lastBass);
                               propagationHintColor = COLORS[type as keyof typeof COLORS];
+                              propagationBucket = type as keyof typeof COLORS;
                               isPropagationStart = stepIdx === stepMetadata.absoluteLastStep + 1;
                             }
 
@@ -2818,10 +2820,8 @@ export default function NeonSynthPad() {
                                 {propagationHintColor && (
                                   <div
                                     style={{
-                                      background: isPropagationStart
-                                        ? `linear-gradient(to right, ${propagationHintColor}44, ${propagationHintColor})`
-                                        : propagationHintColor,
-                                      opacity: 0.11,
+                                      background: propagationHintColor,
+                                      opacity: 0.07,
                                       zIndex: 1,
                                       left: isPropagationStart ? "3px" : "-1px",
                                       borderTopLeftRadius: isPropagationStart ? "2px" : "0px",
@@ -2829,6 +2829,11 @@ export default function NeonSynthPad() {
                                     }}
                                     className="absolute inset-y-1 right-0 pointer-events-none transition-colors duration-300"
                                   />
+                                )}
+                                {isPropagationStart && propagationBucket && (
+                                  <div className="pointer-events-none absolute left-1/2 top-1/2 z-[2] -translate-x-1/2 -translate-y-1/2 opacity-80">
+                                    <ConsonanceGlyph bucket={propagationBucket} size={12} filled={false} />
+                                  </div>
                                 )}
                                 {isDragging &&
                                   dragDelta &&
@@ -2856,10 +2861,10 @@ export default function NeonSynthPad() {
                                     <div
                                       style={{
                                         backgroundColor: isSelected
-                                          ? "#34435c"
+                                          ? "#3d4757"
                                           : isChord
-                                          ? "#131a25"
-                                          : "#26324a",
+                                          ? "#151b25"
+                                          : "#2b3340",
                                         left: hasPrev ? "-1px" : "2px",
                                         right: hasNext ? "-1px" : "3px",
                                         zIndex: 5,
@@ -3080,6 +3085,25 @@ export default function NeonSynthPad() {
                   Follow
                 </button>
 
+                <div
+                  className="ml-auto hidden items-center gap-4 text-[11px] text-t3 min-[1280px]:flex"
+                  role="note"
+                  aria-label="Colour marks use the consonance colours: left bar is motion from the previous step, line is the relation within the chord, glyph is the relation after the last note"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-3 w-[3px] rounded-sm bg-[#a3aebf]" aria-hidden="true" />
+                    Motion from previous step
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-[2px] w-4 rounded-full bg-[#a3aebf]" aria-hidden="true" />
+                    Within chord
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <ConsonanceGlyph bucket="consonant" size={11} filled={false} />
+                    After last note
+                  </span>
+                </div>
+
                 {editTool === "chord" && (
                   <Stepper
                     label="Chord level"
@@ -3092,7 +3116,7 @@ export default function NeonSynthPad() {
                     incLabel="Increase chord volume"
                     onDec={() => setChordVolumeDb(prev => Math.max(-6, prev - 1))}
                     onInc={() => setChordVolumeDb(prev => Math.min(-1, prev + 1))}
-                    className="ml-auto"
+                    className="ml-auto min-[1280px]:ml-0"
                   />
                 )}
               </div>

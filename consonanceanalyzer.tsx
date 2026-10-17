@@ -76,7 +76,7 @@ const getChordName = (idx: number[]) =>
 // Chrome surfaces never use these hues, so every coloured mark carries meaning.
 const COLORS = {
   neutral: "#f2efe6",
-  perfect: "#38e8d6",   // Phase-locked celadon-cyan phosphor
+  perfect: "#38c4f5",   // Phase-locked cyan-blue phosphor
   consonant: "#6ee777", // Warm resonant mint-green phosphor
   slightly: "#f7b733",  // Sodium-amber harmonic tension
   dissonant: "#ff5c4d", // Vermilion high-roughness signal
@@ -100,6 +100,9 @@ const LEGEND: { bucket: keyof typeof COLORS; label: string; hint: string }[] = [
   { bucket: "slightly", label: "Mild", hint: "Seconds, sevenths" },
   { bucket: "dissonant", label: "Dissonant", hint: "Tritone, semitones" },
 ];
+// The legend's short names are the visible vocabulary (readout included).
+// theory.ts's longer BUCKET_TEXT stays for screen-reader labels, where there is no legend to read.
+const BUCKET_LABEL = Object.fromEntries(LEGEND.map(l => [l.bucket, l.label])) as Record<Bucket, string>;
 
 const getConsonanceType = consonanceBucket;
 const getHarmonicTypeForSet = (t: number, held: number[]) =>
@@ -390,7 +393,7 @@ const WaveGlyph: React.FC<{ type: OscillatorType }> = ({ type }) => (
 );
 
 // The consonance vocabulary, drawn once: diamond = perfect, circle = consonant,
-// triangle = mild, cross = dissonant. Used in the legend, the readout and on pads,
+// triangle = slightly consonant, cross = dissonant. Used in the legend, the readout and on pads,
 // so shape and colour always say the same thing.
 const ConsonanceGlyph: React.FC<{
   bucket: keyof typeof COLORS;
@@ -940,7 +943,7 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
       role="img"
       aria-label={
         interval
-          ? `Harmonic scope: ${interval.name}, ${interval.consonance} consonance, ${interval.percentage}`
+          ? `Harmonic scope: ${interval.name}, ${interval.consonance}, ${interval.percentage}`
           : "Harmonic oscilloscope vector scope idle"
       }
       className="absolute inset-0 w-full h-full block"
@@ -2121,7 +2124,7 @@ export default function NeonSynthPad() {
                   }`}
                 >
                   {interval && <ConsonanceGlyph bucket={interval.bucket} size={16} />}
-                  {interval ? interval.consonance : "Idle"}
+                  {interval ? BUCKET_LABEL[interval.bucket as Bucket] : "Idle"}
                 </span>
                 {activeNotes.size > 0 && (
                   <span className="mono inline-flex items-center gap-1.5 text-[11px] font-medium text-t2">
@@ -2137,11 +2140,11 @@ export default function NeonSynthPad() {
             </div>
           </div>
 
-          <div className="mt-3 -mx-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t rule px-3 pt-3 box-content md:flex md:min-h-[28px] md:flex-wrap md:items-center md:gap-x-5 md:gap-y-1.5">
+          <div className="mt-3 -mx-3 grid grid-cols-2 gap-x-2 gap-y-2 border-t rule px-3 pt-3 box-content md:flex md:min-h-[28px] md:flex-wrap md:items-center md:gap-x-5 md:gap-y-1.5">
             {LEGEND.map(({ bucket, label, hint }) => (
               <span
                 key={bucket}
-                className="inline-flex items-center gap-2 text-xs text-t2"
+                className="inline-flex items-center gap-2 whitespace-nowrap text-xs text-t2"
                 title={`${label}: ${hint}`}
               >
                 <ConsonanceGlyph bucket={bucket} size={14} />
@@ -2178,7 +2181,7 @@ export default function NeonSynthPad() {
                 min={40}
                 max={240}
                 title="Drag vertically or scroll to adjust BPM"
-                valueLabel="Master Tempo in BPM"
+                valueLabel="Master tempo in BPM"
                 decLabel="Decrease BPM"
                 incLabel="Increase BPM"
                 onMouseDown={startNumericDrag(bpm, setBpm, 40, 240, 5)}
@@ -2192,7 +2195,7 @@ export default function NeonSynthPad() {
                 min={1}
                 max={60}
                 title="Drag vertically or scroll to adjust note span"
-                valueLabel="Note Span"
+                valueLabel="Note span"
                 decLabel="Decrease note span"
                 incLabel="Increase note span"
                 onMouseDown={startNumericDrag(numNotes, setNumNotes, 1, 60, 15)}
@@ -2206,7 +2209,7 @@ export default function NeonSynthPad() {
                 min={1}
                 max={8}
                 title="Drag vertically or scroll to adjust base octave"
-                valueLabel="Base Octave"
+                valueLabel="Base octave"
                 decLabel="Decrease base octave"
                 incLabel="Increase base octave"
                 onMouseDown={startNumericDrag(octave, setOctave, 1, 8, 18)}
@@ -2320,7 +2323,7 @@ export default function NeonSynthPad() {
                       type="button"
                       onClick={() => setEditTool("select")}
                       aria-pressed={editTool === "select"}
-                      aria-label="Marquee Select Tool"
+                      aria-label="Marquee select tool"
                       className="seg-item"
                       title="Marquee select tool"
                     >
@@ -2465,7 +2468,7 @@ export default function NeonSynthPad() {
               ? "transparent"
               : isActive
               ? `${displayColor}3d`
-              : `${displayColor}16`;
+              : `${displayColor}1c`;
             const padRing = isBinding
               ? `inset 0 0 0 2px ${INK.t1}`
               : isActive && !isDisabled
@@ -3112,7 +3115,7 @@ export default function NeonSynthPad() {
                   value={numSteps}
                   min={4}
                   max={1024}
-                  ariaLabel="Pattern Steps"
+                  ariaLabel="Pattern steps"
                   decLabel="Decrease pattern steps"
                   incLabel="Increase pattern steps"
                   onDec={() => setNumSteps(prev => Math.max(4, prev - 4))}
@@ -3131,7 +3134,7 @@ export default function NeonSynthPad() {
                   value={effectiveStepWidth}
                   min={16}
                   max={160}
-                  ariaLabel="Step Width Zoom"
+                  ariaLabel="Step width zoom"
                   decLabel="Zoom out sequencer step width"
                   incLabel="Zoom in sequencer step width"
                   onDec={() => setStepWidth(prev => Math.max(16, prev - 8))}

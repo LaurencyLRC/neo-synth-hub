@@ -1335,7 +1335,7 @@ export default function NeonSynthPad() {
   }>({});
   const keysPressedRef = useRef<Set<string>>(new Set());
 
-  const initAudio = () => {
+  const initAudio = useCallback(() => {
     if (!audioContextRef.current) {
       const Ctx = window.AudioContext || (window as any).webkitAudioContext;
       const ctx: AudioContext = new Ctx();
@@ -1352,7 +1352,27 @@ export default function NeonSynthPad() {
       audioContextRef.current = ctx;
     }
     if (audioContextRef.current.state === "suspended") audioContextRef.current.resume();
-  };
+  }, []);
+
+  const handleInteraction = useCallback(() => {
+    setHasInteracted(true);
+    initAudio();
+  }, [initAudio]);
+
+  // Ensure pressing Enter, Space, or Escape anywhere on the page dismisses the
+  // startup modal and initializes audio/WebMIDI, even if the user hasn't clicked yet.
+  useEffect(() => {
+    if (hasInteracted) return;
+    const onInitKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " " || e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        handleInteraction();
+      }
+    };
+    window.addEventListener("keydown", onInitKeyDown, { capture: true });
+    return () => window.removeEventListener("keydown", onInitKeyDown, { capture: true });
+  }, [hasInteracted, handleInteraction]);
 
   useEffect(() => {
     const handleBlur = () => {
@@ -1430,7 +1450,7 @@ export default function NeonSynthPad() {
         setPivotNote(index);
       });
     },
-    [disabledNotes, editMode, octave, getFreq, waveType, uiAt]
+    [disabledNotes, editMode, octave, getFreq, waveType, uiAt, initAudio]
   );
 
   const stopNote = useCallback(
@@ -1528,7 +1548,7 @@ export default function NeonSynthPad() {
     };
     timerRef.current = setInterval(scheduler, lookahead);
     return () => clearInterval(timerRef.current);
-  }, [isPlaying, scheduleNote, stopNote]);
+  }, [isPlaying, scheduleNote, stopNote, initAudio]);
 
   const deleteSelectedNotes = useCallback(() => {
     if (selectedKeys.size === 0) return;
@@ -1691,6 +1711,7 @@ export default function NeonSynthPad() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (!hasInteracted) return;
       const el = e.target instanceof HTMLElement ? e.target : null;
       if (el?.closest("input, textarea, select")) return;
 
@@ -1810,6 +1831,7 @@ export default function NeonSynthPad() {
       window.removeEventListener("keyup", handleKeyUp);
     };
   }, [
+    hasInteracted,
     editMode,
     keyBindings,
     bindingIndex,
@@ -1963,11 +1985,6 @@ export default function NeonSynthPad() {
 
   const interval = getIntervalInfo();
 
-  const handleInteraction = () => {
-    setHasInteracted(true);
-    initAudio();
-  };
-
   const startNumericDrag = useCallback(
     (
       initialValue: number,
@@ -2013,14 +2030,6 @@ export default function NeonSynthPad() {
           aria-modal="true"
           aria-labelledby="audio-init-title"
           onClick={handleInteraction}
-          onKeyDown={e => {
-            if (e.key === "Enter" || e.key === " " || e.key === "Escape") {
-              e.preventDefault();
-              handleInteraction();
-            }
-          }}
-          tabIndex={0}
-          autoFocus
           className="fixed inset-0 z-[100] bg-[#080a08]/95 flex items-center justify-center cursor-pointer"
         >
           <div className="panel w-full max-w-[31rem] mx-4 p-6">
@@ -2033,17 +2042,18 @@ export default function NeonSynthPad() {
             <p className="mt-2.5 max-w-[54ch] text-sm leading-relaxed text-t2">
               Hold two voices to plot their just-intonation Lissajous ratio, or three or more to
               trace a bass-demodulated phasor orbit. Trigger notes from QWERTY, pointer, external
-              MIDI, or the 16-step harmonic sequencer.
+              MIDI, or the harmonic step sequencer.
             </p>
 
             <button
               type="button"
+              autoFocus
               onClick={handleInteraction}
-              aria-label="Start audio and MIDI"
+              aria-label="Initialize audio and MIDI engine"
               className="btn btn-primary mt-6 w-full !h-11 !px-4 !text-sm justify-between"
             >
               <span>Initialize audio &amp; MIDI engine</span>
-              <span className="mono text-xs font-medium opacity-75">Enter</span>
+              <span className="text-xs font-medium opacity-65">Press Enter</span>
             </button>
           </div>
         </div>
@@ -2701,7 +2711,7 @@ export default function NeonSynthPad() {
                           isDisabled ? "opacity-25 grayscale pointer-events-none" : ""
                         }`}
                       >
-                        {/* Sticky Piano Key Label: accidentals indent by pl-4 while keeping uniform surface luminance */}
+                        {/* Sticky Piano Key Label */}
                         <div
                           className={`sticky left-0 w-[52px] h-full flex items-center gap-0.5 px-2 ${
                             accidental ? "pl-4" : ""

@@ -439,6 +439,28 @@ body,
   }
 }
 
+/*
+  Touch sizing: below md every control is 40px (the pads are already 44px wide).
+  Declared after the component layer, so these win at equal specificity.
+*/
+@media (max-width: 767px) {
+  .btn,
+  .btn-icon,
+  .stepper {
+    height: 40px;
+  }
+  .btn-icon,
+  .seg-icon,
+  .stepper-btn {
+    width: 40px;
+    flex-shrink: 0;
+  }
+  .seg-item {
+    height: 38px; /* + 2px padding and 1px border either side = a 44px control */
+    min-width: 40px;
+  }
+}
+
 /* Custom scrollbars for the sequencer roll */
 ::-webkit-scrollbar {
   width: 8px;
@@ -500,6 +522,15 @@ input[type="range"].hw-slider::-moz-range-thumb {
   background: var(--t1);
   border: 1px solid #0b0d0b;
   cursor: ew-resize;
+}
+
+/* Touch: keep the 4px track, but give the slider a 40px-tall hit area */
+@media (max-width: 767px) {
+  input[type="range"].hw-slider {
+    box-sizing: content-box;
+    padding: 18px 0;
+    background-clip: content-box;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

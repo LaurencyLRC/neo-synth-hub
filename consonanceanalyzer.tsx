@@ -282,7 +282,7 @@ const EncoderCell: React.FC<{
     title={title}
     className="flex h-full min-w-0 cursor-ns-resize flex-col items-center justify-center gap-1.5"
   >
-    <span className="text-[11px] font-medium tracking-[0.02em] text-t2">{label}</span>
+    <span className="text-xs font-medium tracking-[0.02em] text-t2">{label}</span>
     <div className="relative h-14 w-14">
       <ArcDial value={value} min={min} max={max} />
       <div
@@ -1976,7 +1976,7 @@ export default function NeonSynthPad() {
     const d = describeInterval(p1, p2);
     return {
       type: "interval",
-      name: d.name.replace(/\b[a-z]/g, c => c.toUpperCase()),
+      name: d.name.replace(/^[a-z]/, c => c.toUpperCase()),
       percentage: `${d.ratio} · ${Math.round(d.cents)}¢`,
       consonance: BUCKET_TEXT[d.bucket],
       diff: d.semitones,
@@ -2127,7 +2127,7 @@ export default function NeonSynthPad() {
                   {interval ? BUCKET_LABEL[interval.bucket as Bucket] : "Idle"}
                 </span>
                 {activeNotes.size > 0 && (
-                  <span className="mono inline-flex items-center gap-1.5 text-[11px] font-medium text-t2">
+                  <span className="mono inline-flex items-center gap-1.5 text-xs font-medium text-t2">
                     <span className="h-1.5 w-1.5 rounded-full bg-[#f2efe6]" aria-hidden="true" />
                     Live
                   </span>
@@ -2449,6 +2449,9 @@ export default function NeonSynthPad() {
             const noteOctave = octave + Math.floor(i / 12);
             const accidental = isAccidental(i);
             const isBinding = bindingIndex === i;
+            // Pads past the default key map carry a "?" placeholder binding; show it as unbound.
+            const unbound = i >= DEFAULT_KEYS_EXTENDED.length && keyBindings[i]?.join("") === "?";
+            const keyText = unbound ? "–" : keyBindings[i]?.join(" ");
             const activeIndices =
               activeNotes.size > 0
                 ? Array.from(activeNotes)
@@ -2480,7 +2483,7 @@ export default function NeonSynthPad() {
                 key={i}
                 role="button"
                 tabIndex={isDisabled ? -1 : 0}
-                aria-label={`Note ${noteLabel}${noteOctave}, ${type !== "neutral" ? BUCKET_TEXT[type as Bucket] : "neutral consonance"}${keyBindings[i]?.length ? `, key ${keyBindings[i].join(" ")}` : ""}`}
+                aria-label={`Note ${noteLabel}${noteOctave}, ${type !== "neutral" ? BUCKET_TEXT[type as Bucket] : "neutral consonance"}${keyBindings[i]?.length && !unbound ? `, key ${keyBindings[i].join(" ")}` : ""}`}
                 aria-pressed={isActive}
                 aria-disabled={isDisabled}
                 onKeyDown={e => {
@@ -2560,7 +2563,7 @@ export default function NeonSynthPad() {
                   {isBinding ? (
                     <div className="flex flex-col items-center gap-1 text-center">
                       <span
-                        className={`rounded-[3px] px-1.5 py-1 text-[11px] font-medium leading-tight text-balance ${
+                        className={`rounded-[3px] px-1.5 py-1 text-xs font-medium leading-tight text-balance ${
                           bindingError
                             ? "border border-white/30 text-t1"
                             : "bg-[#f2efe6] text-[#0b0d0b]"
@@ -2568,10 +2571,12 @@ export default function NeonSynthPad() {
                       >
                         {bindingError || "Press a key"}
                       </span>
-                      <span className="mono text-[11px] font-medium uppercase text-t2">
-                        {keyBindings[i]?.join(" ")}
+                      <span className="mono text-xs font-medium uppercase text-t2">
+                        {keyText}
                       </span>
                     </div>
+                  ) : unbound && !editMode && !isDisabled ? (
+                    <span aria-hidden="true" className="h-[22px]" />
                   ) : (
                     <span
                       className={`keycap ${isDisabled ? "normal-case" : "uppercase"} ${
@@ -2580,7 +2585,7 @@ export default function NeonSynthPad() {
                         isDisabled ? "!border-transparent !bg-transparent !text-[#878174]" : ""
                       }`}
                     >
-                      {isDisabled ? "Off" : keyBindings[i]?.join(" ")}
+                      {isDisabled ? "Off" : keyText}
                     </span>
                   )}
                 </div>
@@ -2623,7 +2628,7 @@ export default function NeonSynthPad() {
                         className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap"
                         style={{ gridRow: 1, gridColumn: `${g.start + 1} / span ${g.count}` }}
                       >
-                        <span className="mono text-[11px] font-medium leading-none text-t2">
+                        <span className="mono text-xs font-medium leading-none text-t2">
                           C{octave + g.octave}
                         </span>
                         <span className="mt-[5px] h-[5px] min-w-0 flex-1 rounded-tr-[2px] border-r border-t border-[color:var(--line-2)]" />
@@ -2718,7 +2723,7 @@ export default function NeonSynthPad() {
                         <div
                           className={`sticky left-0 w-[52px] h-full flex items-center gap-0.5 px-2 ${
                             accidental ? "pl-4" : ""
-                          } mono text-[11px] font-medium border-r border-[#dad2be]/[0.12] z-50 shrink-0 transition-colors ${
+                          } mono text-xs font-medium border-r border-[#dad2be]/[0.12] z-50 shrink-0 transition-colors ${
                             isNoteSounding
                               ? "bg-[#262b25] text-t1"
                               : isRootC
@@ -2729,7 +2734,7 @@ export default function NeonSynthPad() {
                         >
                           <span>{getNoteName(noteIdx)}</span>
                           {isRootC && (
-                            <span className="text-[10.5px] font-normal text-t2">
+                            <span className="text-[11px] font-normal text-t2">
                               {noteOct}
                             </span>
                           )}
@@ -3051,7 +3056,7 @@ export default function NeonSynthPad() {
 
                   {/* Sticky step ruler (h-8 = 32px; the hover maths above assumes this) */}
                   <div className="h-8 border-b border-[#dad2be]/[0.12] flex bg-[#131613] z-[100] sticky top-0 shrink-0">
-                    <div className="w-[52px] border-r border-[#dad2be]/[0.12] shrink-0 bg-[#131613] sticky left-0 z-[110] flex items-center justify-center text-[11px] font-medium text-t3">
+                    <div className="w-[52px] border-r border-[#dad2be]/[0.12] shrink-0 bg-[#131613] sticky left-0 z-[110] flex items-center justify-center text-xs font-medium text-t3">
                       Step
                     </div>
                     {Array.from({ length: numSteps }).map((_, i) => {
@@ -3073,7 +3078,7 @@ export default function NeonSynthPad() {
                           }
                           onMouseLeave={() => !isTouchDevice && setHoveredCell(null)}
                           style={{ width: `${effectiveStepWidth}px` }}
-                          className={`mono flex-shrink-0 h-full flex items-center justify-center text-[11px] font-medium border-r ${
+                          className={`mono flex-shrink-0 h-full flex items-center justify-center text-xs font-medium border-r ${
                             isBar
                               ? "border-r-[#dad2be]/[0.22]"
                               : isBeat
@@ -3182,7 +3187,7 @@ export default function NeonSynthPad() {
                 </button>
 
                 <div
-                  className="ml-auto hidden items-center gap-4 text-[11px] text-t3 min-[1280px]:flex"
+                  className="ml-auto hidden items-center gap-4 text-xs text-t3 min-[1280px]:flex"
                   role="note"
                   aria-label="Colour marks use the consonance colours: left bar is motion from the previous step, line is the relation within the chord, glyph is the relation after the last note"
                 >

@@ -2237,7 +2237,7 @@ export default function NeonSynthPad() {
               data-playing={isPlaying}
               aria-label={isPlaying ? "Stop sequence playback" : "Start sequence playback"}
               title="Play or stop (Space)"
-              className="land-play transport max-md:h-[52px] max-md:w-full max-md:flex-row max-md:gap-2"
+              className="land-play transport max-md:h-[60px] max-md:w-full max-md:flex-row max-md:gap-2"
             >
               {isPlaying ? (
                 <Square size={20} fill="currentColor" />
@@ -2295,7 +2295,7 @@ export default function NeonSynthPad() {
             <div
               role="radiogroup"
               aria-label="Waveform"
-              className="land-waves well grid grid-cols-4 gap-1 p-1 max-md:h-[52px] md:w-[136px] md:shrink-0 md:grid-cols-2"
+              className="land-waves well grid grid-cols-4 gap-1 p-1 max-md:h-[60px] md:w-[136px] md:shrink-0 md:grid-cols-2"
             >
               {WAVES.map(t => (
                 <button

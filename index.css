@@ -517,7 +517,7 @@ body,
   div.land-root {
     display: grid;
     grid-template-columns: minmax(260px, 34%) minmax(0, 1fr);
-    grid-template-rows: max(180px, calc(100dvh - 84px)) 52px auto;
+    grid-template-rows: max(180px, calc(100dvh - 92px)) 60px auto;
     align-content: start;
     gap: 8px;
     height: 100dvh;
@@ -526,7 +526,7 @@ body,
     overflow-y: auto;
   }
   div.land-root[data-view="roll"] {
-    grid-template-rows: max(300px, calc(100dvh - 84px)) auto auto;
+    grid-template-rows: max(300px, calc(100dvh - 92px)) auto auto;
   }
   .land-root > header {
     display: contents;
@@ -598,7 +598,7 @@ body,
     flex-direction: row;
     gap: 8px;
     width: 100%;
-    height: 52px;
+    height: 60px;
   }
   .land-root .land-waves {
     grid-column: 2;
@@ -606,7 +606,7 @@ body,
     align-self: start;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     width: auto;
-    height: 52px;
+    height: 60px;
   }
   .land-root .land-waves .wave {
     gap: 4px;
@@ -639,7 +639,7 @@ body,
   .land-root[data-view="roll"] .land-play {
     align-self: stretch;
     height: auto;
-    min-height: 52px;
+    min-height: 60px;
     max-height: 96px;
   }
   .land-root[data-view="roll"] .land-waves {

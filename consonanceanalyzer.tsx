@@ -496,9 +496,6 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
 
     let running = true;
     let lastTime = performance.now();
-    const reduceMotion =
-      typeof window !== "undefined" &&
-      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
     const drawOsdText = (
       text: string,
@@ -559,7 +556,7 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
     const render = (time: number) => {
       if (!running) return;
       const rawDt = Math.min((time - lastTime) / 1000, 0.08);
-      const dt = reduceMotion ? 0 : rawDt;
+      const dt = rawDt; // the scope's motion is the measurement, so it is not frozen by reduced-motion settings
       lastTime = time;
 
       const rect = canvas.getBoundingClientRect();
@@ -2027,6 +2024,15 @@ export default function NeonSynthPad() {
     ? [...interval.pitches].sort((a, b) => a - b)
     : [];
 
+  // "Live" marker. Phones show it beside the note chips (or the Standby title); desktop shows it in the classification row.
+  const liveTag = (visibility: string, extra = "") =>
+    activeNotes.size > 0 ? (
+      <span className={`mono inline-flex items-center gap-1.5 text-xs font-medium text-t2 ${visibility} ${extra}`}>
+        <span className="h-1.5 w-1.5 rounded-full bg-[#f2efe6]" aria-hidden="true" />
+        Live
+      </span>
+    ) : null;
+
   return (
     <div className="flex h-[100dvh] w-screen flex-col gap-3 overflow-y-auto overflow-x-hidden p-3 text-t1 select-none max-md:gap-2 max-md:py-2 md:h-screen md:gap-4 md:overflow-hidden md:p-4">
       {/* Audio & WebMIDI initialization dialog */}
@@ -2070,8 +2076,7 @@ export default function NeonSynthPad() {
         {/* Left: harmonic readout, vector scope, legend */}
         <section aria-label="Harmonic readout" className="panel p-3 flex flex-col max-md:order-1 max-md:shrink-0">
           <div className="flex flex-col gap-3 max-md:gap-2 md:h-[152px] md:flex-row">
-            {/* Phones: name and meta on the left, classification on the right, at a fixed height so the keybed never jumps */}
-            <div className="flex min-w-0 flex-col justify-between gap-4 max-md:h-[88px] max-md:flex-row max-md:items-start max-md:gap-3 md:w-[232px] md:shrink-0 md:gap-0">
+            <div className="relative flex min-w-0 flex-col justify-between gap-4 max-md:min-h-[80px] max-md:gap-1.5 md:w-[232px] md:shrink-0 md:gap-0">
               <div className="min-w-0 max-md:flex-1">
                 {interval ? (
                   <>
@@ -2081,7 +2086,7 @@ export default function NeonSynthPad() {
                     >
                       {interval.name}
                     </div>
-                    <div className="mt-2 flex items-baseline gap-2.5 text-[12.5px] text-t2">
+                    <div className="mt-2 flex items-baseline gap-2.5 text-[12.5px] text-t2 max-md:mt-1">
                       {interval.type === "chord" ? (
                         <span>{interval.diff} voices</span>
                       ) : (
@@ -2097,7 +2102,7 @@ export default function NeonSynthPad() {
                         </>
                       )}
                     </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-1 max-md:mt-2">
+                    <div className="mt-3 flex flex-wrap items-center gap-1 max-md:mt-1.5">
                       {sortedIntervalPitches.slice(0, 8).map((p, idx) => (
                         <span
                           key={`${p}-${idx}`}
@@ -2111,19 +2116,26 @@ export default function NeonSynthPad() {
                       {sortedIntervalPitches.length > 8 && (
                         <span className="mono text-xs text-t3">+{sortedIntervalPitches.length - 8}</span>
                       )}
+                      {liveTag("md:hidden", "ml-auto")}
                     </div>
                   </>
                 ) : (
                   <>
-                    <div className="text-[28px] font-semibold leading-[1.05] tracking-[-0.02em] text-t3 md:text-[32px]">
-                      Standby
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="text-[28px] font-semibold leading-[1.05] tracking-[-0.02em] text-t3 md:text-[32px]">
+                        Standby
+                      </div>
                     </div>
-                    <div className="mt-2 text-[13px] text-t3">Play 2+ notes to analyze</div>
+                    <div className="mt-2 flex items-center justify-between gap-3 text-[13px] text-t3">
+                      <span>Play 2+ notes to analyze</span>
+                      {liveTag("md:hidden")}
+                    </div>
                   </>
                 )}
               </div>
 
-              <div className="flex h-6 items-center justify-between gap-2 max-md:mb-0.5 max-md:h-[22px] max-md:shrink-0 max-md:gap-3 max-md:self-end">
+              {/* Phones: the classification sits top-right on the title line; Live stays on the chips line */}
+              <div className="flex h-6 items-center justify-between gap-2 max-md:absolute max-md:right-0 max-md:top-0 max-md:h-[34px]">
                 <span
                   className={`flex items-center gap-2 text-sm font-medium ${
                     interval ? "text-t1" : "text-t3"
@@ -2132,16 +2144,11 @@ export default function NeonSynthPad() {
                   {interval && <ConsonanceGlyph bucket={interval.bucket} size={16} />}
                   {interval ? BUCKET_LABEL[interval.bucket as Bucket] : "Idle"}
                 </span>
-                {activeNotes.size > 0 && (
-                  <span className="mono inline-flex items-center gap-1.5 text-xs font-medium text-t2">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#f2efe6]" aria-hidden="true" />
-                    Live
-                  </span>
-                )}
+                {liveTag("max-md:hidden")}
               </div>
             </div>
 
-            <div className="well relative h-[clamp(80px,12dvh,180px)] min-w-0 overflow-hidden md:h-auto md:flex-1">
+            <div className="well relative h-[clamp(72px,9dvh,140px)] min-w-0 overflow-hidden md:h-auto md:flex-1">
               <HarmonicVisualizer interval={interval} />
             </div>
           </div>

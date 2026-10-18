@@ -2116,7 +2116,6 @@ export default function NeonSynthPad() {
                       {sortedIntervalPitches.length > 8 && (
                         <span className="mono text-xs text-t3">+{sortedIntervalPitches.length - 8}</span>
                       )}
-                      {liveTag("md:hidden", "ml-auto")}
                     </div>
                   </>
                 ) : (
@@ -2126,10 +2125,7 @@ export default function NeonSynthPad() {
                         Standby
                       </div>
                     </div>
-                    <div className="mt-2 flex items-center justify-between gap-3 text-[13px] text-t3">
-                      <span>Play 2+ notes to analyze</span>
-                      {liveTag("md:hidden")}
-                    </div>
+                    <div className="mt-2 text-[13px] text-t3">Play 2+ notes to analyze</div>
                   </>
                 )}
               </div>
@@ -2146,6 +2142,8 @@ export default function NeonSynthPad() {
                 </span>
                 {liveTag("max-md:hidden")}
               </div>
+              {/* Phones: Live has one fixed place, bottom-right of the readout block, in every state */}
+              {liveTag("md:hidden", "max-md:absolute max-md:bottom-0 max-md:right-0 max-md:h-[22px]")}
             </div>
 
             <div className="well relative h-[clamp(72px,9dvh,140px)] min-w-0 overflow-hidden md:h-auto md:flex-1">

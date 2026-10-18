@@ -497,6 +497,29 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
     let running = true;
     let lastTime = performance.now();
 
+    const osdFont = (mono: boolean) =>
+      mono
+        ? "500 10.5px 'Azeret Mono', 'IBM Plex Mono', ui-monospace, monospace"
+        : "500 11px 'Chivo', 'IBM Plex Sans', system-ui, sans-serif";
+    const osdWidth = (text: string, mono = false) => {
+      ctx.save();
+      ctx.font = osdFont(mono);
+      const w = ctx.measureText(text).width;
+      ctx.restore();
+      return w;
+    };
+    // Short scopes (phones, landscape strips) carry their readouts in side columns,
+    // so no text ever sits on the trace; the figure keeps the full height.
+    type OsdRow = { text: string; color: string; mono?: boolean };
+    const sideWidth = (left: OsdRow[], right: OsdRow[]) => {
+      const w = (rows: OsdRow[]) => rows.reduce((m, r) => Math.max(m, osdWidth(r.text, r.mono)), 0);
+      return Math.max(w(left), w(right)) + 14 + 12;
+    };
+    const drawSideColumns = (left: OsdRow[], right: OsdRow[], width: number) => {
+      left.forEach((l, i) => drawOsdText(l.text, 14, 22 + i * 14, l.color, "left", l.mono));
+      right.forEach((r, i) => drawOsdText(r.text, width - 14, 22 + i * 14, r.color, "right", r.mono));
+    };
+
     const drawOsdText = (
       text: string,
       x: number,
@@ -506,9 +529,7 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
       mono = false
     ) => {
       ctx.save();
-      ctx.font = mono
-        ? "500 10.5px 'Azeret Mono', 'IBM Plex Mono', ui-monospace, monospace"
-        : "500 11px 'Chivo', 'IBM Plex Sans', system-ui, sans-serif";
+      ctx.font = osdFont(mono);
       ctx.textAlign = align;
       ctx.strokeStyle = "rgba(8, 10, 8, 0.92)";
       ctx.lineWidth = 3;
@@ -658,7 +679,15 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         phaseRef.current = (phaseRef.current + phaseSpeed * dt) % (Math.PI * 4);
         const phi = phaseRef.current;
 
-        const rx = Math.min(width * 0.42, (height / 2) * 1.45);
+        const compact = height < 190;
+        const sideRows = compact
+          ? {
+              left: [{ text: interval.ratio || `${a}:${b}`, color: INK.t1, mono: true }] as OsdRow[],
+              right: [{ text: `${noteName(p1)}, ${noteName(p2)}`, color: INK.t2 }] as OsdRow[],
+            }
+          : null;
+        const sideW = sideRows ? sideWidth(sideRows.left, sideRows.right) : 0;
+        const rx = Math.min(sideRows ? Math.max(40, width / 2 - sideW) : width * 0.42, (height / 2) * 1.45);
         const ry = (height / 2) * 0.78;
 
         const usePureRatio = a <= 16 && b <= 16;
@@ -691,16 +720,20 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         ctx.fill();
         ctx.stroke();
 
-        ctx.strokeStyle = INK.axis;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(14, height - 28);
-        ctx.lineTo(width - 14, height - 28);
-        ctx.stroke();
+        if (sideRows) {
+          drawSideColumns(sideRows.left, sideRows.right, width);
+        } else {
+          ctx.strokeStyle = INK.axis;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(14, height - 28);
+          ctx.lineTo(width - 14, height - 28);
+          ctx.stroke();
 
-        drawOsdText("Lissajous, 2 voices", 14, 20, INK.t2, "left");
-        drawOsdText(interval.ratio || `${a}:${b}`, 14, height - 10, INK.t1, "left", true);
-        drawOsdText(`${noteName(p1)}, ${noteName(p2)}`, width - 14, height - 10, INK.t2, "right");
+          drawOsdText("Lissajous, 2 voices", 14, 20, INK.t2, "left");
+          drawOsdText(interval.ratio || `${a}:${b}`, 14, height - 10, INK.t1, "left", true);
+          drawOsdText(`${noteName(p1)}, ${noteName(p2)}`, width - 14, height - 10, INK.t2, "right");
+        }
       } else {
         // --- BASS-DEMODULATED VECTOR SUPERPOSITION PREVIEW (3+ NOTES) ---
         const pitches = [...interval.pitches].sort((x, y) => x - y);
@@ -711,8 +744,24 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         const spanX = Math.max(0.75, maxX - minX);
         const spanY = Math.max(0.75, maxY - minY);
 
-        const availW = Math.max(140, width - 32);
-        const availH = Math.max(96, height - 12);
+        const deltaLabels = pitches.map(
+          p => `${noteName(p)}(${getDeltaFractionLabel(p - bass)})`
+        );
+        // Short scope: readouts move to side columns (see drawSideColumns) while the voices fit
+        const compact = height < 190 && N <= Math.floor((height - 28) / 14) + 1;
+        const sideRows = compact
+          ? {
+              left: deltaLabels.map(text => ({ text, color: INK.t2, mono: true })) as OsdRow[],
+              right: [
+                { text: `${revolutions} rev`, color: INK.t1, mono: true },
+                { text: "|Z| 0.00", color: INK.t1, mono: true },
+              ] as OsdRow[],
+            }
+          : null;
+        const sideW = sideRows ? sideWidth(sideRows.left, sideRows.right) : 0;
+
+        const availW = sideRows ? Math.max(60, width - 2 * sideW) : Math.max(140, width - 32);
+        const availH = sideRows ? height - 16 : Math.max(96, height - 12);
 
         const R = Math.min(availW / spanX, availH / spanY, height * 0.86);
         const ox = cx - ((minX + maxX) / 2) * R;
@@ -885,41 +934,47 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
           }
         }
 
-        const deltaLabels = pitches.map(
-          p => `${noteName(p)}(${getDeltaFractionLabel(p - bass)})`
-        );
-        const twoLine = deltaLabels.length > 4;
-        const ruleY = height - (twoLine ? 40 : 28);
-
-        drawOsdText(`Bass-demodulated, ${N} voices`, 14, 20, INK.t2, "left");
-        if (width > 460) {
-          drawOsdText("Z_rel(t) = e^{-iω₀t}·Z(t)", width - 14, 20, INK.t3, "right", true);
-        }
-
-        ctx.strokeStyle = INK.axis;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(14, ruleY);
-        ctx.lineTo(width - 14, ruleY);
-        ctx.stroke();
-
-        if (!twoLine) {
-          drawOsdText(deltaLabels.join("   "), 14, height - 10, INK.t2, "left", true);
-        } else {
-          const mid = Math.ceil(deltaLabels.length / 2);
-          drawOsdText(deltaLabels.slice(0, mid).join("   "), 14, height - 22, INK.t2, "left", true);
-          drawOsdText(deltaLabels.slice(mid).join("   "), 14, height - 8, INK.t2, "left", true);
-        }
-
         const mag = Math.hypot(tip.x - ox, tip.y - oy) / R;
-        drawOsdText(
-          `${revolutions} rev   |Z| ${mag.toFixed(2)}`,
-          width - 14,
-          height - 10,
-          INK.t1,
-          "right",
-          true
-        );
+
+        if (sideRows) {
+          drawSideColumns(
+            sideRows.left,
+            [sideRows.right[0], { ...sideRows.right[1], text: `|Z| ${mag.toFixed(2)}` }],
+            width
+          );
+        } else {
+          const twoLine = deltaLabels.length > 4;
+          const ruleY = height - (twoLine ? 40 : 28);
+
+          drawOsdText(`Bass-demodulated, ${N} voices`, 14, 20, INK.t2, "left");
+          if (width > 460) {
+            drawOsdText("Z_rel(t) = e^{-iω₀t}·Z(t)", width - 14, 20, INK.t3, "right", true);
+          }
+
+          ctx.strokeStyle = INK.axis;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(14, ruleY);
+          ctx.lineTo(width - 14, ruleY);
+          ctx.stroke();
+
+          if (!twoLine) {
+            drawOsdText(deltaLabels.join("   "), 14, height - 10, INK.t2, "left", true);
+          } else {
+            const mid = Math.ceil(deltaLabels.length / 2);
+            drawOsdText(deltaLabels.slice(0, mid).join("   "), 14, height - 22, INK.t2, "left", true);
+            drawOsdText(deltaLabels.slice(mid).join("   "), 14, height - 8, INK.t2, "left", true);
+          }
+
+          drawOsdText(
+            `${revolutions} rev   |Z| ${mag.toFixed(2)}`,
+            width - 14,
+            height - 10,
+            INK.t1,
+            "right",
+            true
+          );
+        }
       }
 
       ctx.restore();
@@ -1269,7 +1324,12 @@ export default function NeonSynthPad() {
       ? availRollHeight / Math.max(1, renderedNoteIndices.length)
       : Math.max(24, availRollHeight / 24);
   // Phones: never thinner than a finger-sized lane; the roll scrolls vertically instead.
-  const isPhoneWidth = typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches;
+  const isPhoneWidth =
+    typeof window !== "undefined" &&
+    window.matchMedia("(max-width: 767px), (orientation: landscape) and (max-height: 500px) and (max-width: 1024px)").matches;
+  // Touch-first devices have no keyboard to bind keys with, so edit mode only mutes there
+  const touchPrimary =
+    typeof window !== "undefined" && window.matchMedia("(hover: none) and (pointer: coarse)").matches;
   const rowHeight = isPhoneWidth ? Math.max(32, baseRowHeight) : baseRowHeight;
 
   const effectiveStepWidth = useMemo(() => {
@@ -2034,7 +2094,10 @@ export default function NeonSynthPad() {
     ) : null;
 
   return (
-    <div className="flex h-[100dvh] w-screen flex-col gap-3 overflow-y-auto overflow-x-hidden p-3 text-t1 select-none max-md:gap-2 max-md:py-2 md:h-screen md:gap-4 md:overflow-hidden md:p-4">
+    <div
+      data-view={viewMode}
+      className="land-root flex h-[100dvh] w-screen flex-col gap-3 overflow-y-auto overflow-x-hidden p-3 text-t1 select-none max-md:gap-2 max-md:py-2 md:h-screen md:gap-4 md:overflow-hidden md:p-4"
+    >
       {/* Audio & WebMIDI initialization dialog */}
       {!hasInteracted && (
         <div
@@ -2074,14 +2137,14 @@ export default function NeonSynthPad() {
       {/* Header: two panels on the same two-row grid, so their dividers line up */}
       <header className="w-full max-w-[1720px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4 shrink-0 z-30 max-md:contents">
         {/* Left: harmonic readout, vector scope, legend */}
-        <section aria-label="Harmonic readout" className="panel p-3 flex flex-col max-md:order-1 max-md:shrink-0">
-          <div className="flex flex-col gap-3 md:h-[152px] md:flex-row">
-            <div className="relative flex min-w-0 flex-col justify-between gap-4 max-md:min-h-[80px] max-md:gap-1.5 md:w-[232px] md:shrink-0 md:gap-0">
+        <section aria-label="Harmonic readout" className="land-readout panel p-3 flex flex-col max-md:order-1 max-md:shrink-0">
+          <div className="land-r-top flex flex-col gap-3 md:h-[152px] md:flex-row">
+            <div className="land-r-text relative flex min-w-0 flex-col justify-between gap-4 max-md:min-h-[80px] max-md:gap-1.5 md:w-[232px] md:shrink-0 md:gap-0">
               <div className="min-w-0 max-md:flex-1">
                 {interval ? (
                   <>
                     <div
-                      className="truncate text-[28px] font-semibold leading-[1.05] tracking-[-0.02em] text-t1 md:text-[32px]"
+                      className="land-title truncate text-[28px] font-semibold leading-[1.05] tracking-[-0.02em] text-t1 md:text-[32px]"
                       title={interval.name}
                     >
                       {interval.name}
@@ -2121,7 +2184,7 @@ export default function NeonSynthPad() {
                 ) : (
                   <>
                     <div className="flex items-start justify-between gap-3">
-                      <div className="text-[28px] font-semibold leading-[1.05] tracking-[-0.02em] text-t3 md:text-[32px]">
+                      <div className="land-title text-[28px] font-semibold leading-[1.05] tracking-[-0.02em] text-t3 md:text-[32px]">
                         Standby
                       </div>
                     </div>
@@ -2131,7 +2194,7 @@ export default function NeonSynthPad() {
               </div>
 
               {/* Phones: the classification sits top-right on the title line; Live stays on the chips line */}
-              <div className="flex h-6 items-center justify-between gap-2 max-md:absolute max-md:right-0 max-md:top-0 max-md:h-[34px]">
+              <div className="land-r-class flex h-6 items-center justify-between gap-2 max-md:absolute max-md:right-0 max-md:top-0 max-md:h-[34px]">
                 <span
                   className={`flex items-center gap-2 text-sm font-medium ${
                     interval ? "text-t1" : "text-t3"
@@ -2140,18 +2203,18 @@ export default function NeonSynthPad() {
                   {interval && <ConsonanceGlyph bucket={interval.bucket} size={16} />}
                   {interval ? BUCKET_LABEL[interval.bucket as Bucket] : "Idle"}
                 </span>
-                {liveTag("max-md:hidden")}
+                {liveTag("max-md:hidden", "land-live-a")}
               </div>
               {/* Phones: Live has one fixed place, bottom-right of the readout block, in every state */}
-              {liveTag("md:hidden", "max-md:absolute max-md:bottom-0 max-md:right-0 max-md:h-[22px]")}
+              {liveTag("md:hidden", "land-live-b max-md:absolute max-md:bottom-0 max-md:right-0 max-md:h-[22px]")}
             </div>
 
-            <div className="well relative h-[clamp(104px,14dvh,220px)] min-w-0 overflow-hidden md:h-auto md:flex-1">
+            <div className="land-scope well relative h-[clamp(104px,14dvh,220px)] min-w-0 overflow-hidden md:h-auto md:flex-1">
               <HarmonicVisualizer interval={interval} />
             </div>
           </div>
 
-          <div className="mt-3 -mx-3 grid grid-cols-2 gap-x-2 gap-y-2 border-t rule px-3 pt-3 box-content max-md:mt-3 max-md:flex max-md:flex-wrap max-md:justify-between max-md:gap-y-1 max-md:pt-3 md:flex md:min-h-[28px] md:flex-wrap md:items-center md:gap-x-5 md:gap-y-1.5">
+          <div className="land-legend mt-3 -mx-3 grid grid-cols-2 gap-x-2 gap-y-2 border-t rule px-3 pt-3 box-content max-md:mt-3 max-md:flex max-md:flex-wrap max-md:justify-between max-md:gap-y-1 max-md:pt-3 md:flex md:min-h-[28px] md:flex-wrap md:items-center md:gap-x-5 md:gap-y-1.5">
             {LEGEND.map(({ bucket, label, hint }) => (
               <span
                 key={bucket}
@@ -2166,15 +2229,15 @@ export default function NeonSynthPad() {
         </section>
 
         {/* Right: transport, encoders, waveform, then view and file controls */}
-        <section aria-label="Controls" className="panel p-3 flex flex-col max-md:order-3 max-md:shrink-0">
-          <div className="flex flex-col gap-3 max-md:grid max-md:grid-cols-[88px_minmax(0,1fr)] max-md:gap-2 md:h-[152px] md:flex-row">
+        <section aria-label="Controls" className="land-ctl panel p-3 flex flex-col max-md:order-3 max-md:shrink-0">
+          <div className="land-ctl-top flex flex-col gap-3 max-md:grid max-md:grid-cols-[88px_minmax(0,1fr)] max-md:gap-2 md:h-[152px] md:flex-row">
             <button
               type="button"
               onClick={() => setIsPlaying(!isPlaying)}
               data-playing={isPlaying}
               aria-label={isPlaying ? "Stop sequence playback" : "Start sequence playback"}
               title="Play or stop (Space)"
-              className="transport max-md:h-[52px] max-md:w-full max-md:flex-row max-md:gap-2"
+              className="land-play transport max-md:h-[52px] max-md:w-full max-md:flex-row max-md:gap-2"
             >
               {isPlaying ? (
                 <Square size={20} fill="currentColor" />
@@ -2184,7 +2247,7 @@ export default function NeonSynthPad() {
               <span>{isPlaying ? "Stop" : "Play"}</span>
             </button>
 
-            <div className="well grid min-w-0 grid-cols-3 cols-rule max-md:order-last max-md:col-span-2 max-md:py-1.5 md:flex-1">
+            <div className="land-dials well grid min-w-0 grid-cols-3 cols-rule max-md:order-last max-md:col-span-2 max-md:py-1.5 md:flex-1">
               <EncoderCell
                 label="BPM"
                 display={String(bpm)}
@@ -2232,7 +2295,7 @@ export default function NeonSynthPad() {
             <div
               role="radiogroup"
               aria-label="Waveform"
-              className="well grid grid-cols-4 gap-1 p-1 max-md:h-[52px] md:w-[136px] md:shrink-0 md:grid-cols-2"
+              className="land-waves well grid grid-cols-4 gap-1 p-1 max-md:h-[52px] md:w-[136px] md:shrink-0 md:grid-cols-2"
             >
               {WAVES.map(t => (
                 <button
@@ -2252,10 +2315,10 @@ export default function NeonSynthPad() {
             </div>
           </div>
 
-          <div className="mt-3 -mx-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t rule px-3 pt-3 box-content max-md:mt-2 max-md:gap-x-2 max-md:gap-y-1 max-md:pt-2">
+          <div className="land-ctl-bar mt-3 -mx-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t rule px-3 pt-3 box-content max-md:mt-2 max-md:gap-x-2 max-md:gap-y-1 max-md:pt-2">
             {/* Phones: both groups dissolve into one wrapping row; view switch and MIDI lead, actions follow */}
             <div className="flex flex-wrap items-center gap-2 max-md:contents">
-              <div className="seg max-md:order-first" role="group" aria-label="Surface">
+              <div className="seg max-md:order-first max-md:min-w-0 max-md:flex-1" role="group" aria-label="Surface">
                 <button
                   type="button"
                   onClick={() => setViewMode("pad")}
@@ -2303,19 +2366,20 @@ export default function NeonSynthPad() {
                     title="Configure key bindings and mute pads"
                   >
                     <Settings2 size={14} />
-                    <span>Edit keys</span>
+                    <span className="max-md:hidden">Edit keys</span>
+                    <span className="md:hidden">{editMode ? "Done" : "Edit keys"}</span>
                   </button>
                 </>
               )}
 
               {viewMode === "roll" && (
                 <>
-                  <div className="seg max-md:my-0.5" role="group" aria-label="Edit tool">
+                  <div className="seg max-md:my-0.5 max-md:flex-[3]" role="group" aria-label="Edit tool">
                     <button
                       type="button"
                       onClick={() => setEditTool("draw")}
                       aria-pressed={editTool === "draw"}
-                      className="seg-item"
+                      className="seg-item max-md:flex-1"
                       title="Draw lead note"
                     >
                       <Pencil size={14} />
@@ -2325,7 +2389,7 @@ export default function NeonSynthPad() {
                       type="button"
                       onClick={() => setEditTool("chord")}
                       aria-pressed={editTool === "chord"}
-                      className="seg-item"
+                      className="seg-item max-md:flex-1"
                       title="Draw backing chord note"
                     >
                       <Layers size={14} />
@@ -2336,7 +2400,7 @@ export default function NeonSynthPad() {
                       onClick={() => setEditTool("select")}
                       aria-pressed={editTool === "select"}
                       aria-label="Marquee select tool"
-                      className="seg-item"
+                      className="seg-item max-md:flex-1"
                       title="Marquee select tool"
                     >
                       <BoxSelect size={14} />
@@ -2344,13 +2408,13 @@ export default function NeonSynthPad() {
                     </button>
                   </div>
 
-                  <div className="seg max-md:my-0.5" role="group" aria-label="Clipboard">
+                  <div className="seg max-md:my-0.5 max-md:flex-[4]" role="group" aria-label="Clipboard">
                     <button
                       type="button"
                       onClick={copySelection}
                       disabled={selectedKeys.size === 0}
                       aria-label="Copy selected notes (Ctrl+C)"
-                      className="seg-item seg-icon"
+                      className="seg-item seg-icon max-md:flex-1"
                       title="Copy (Ctrl+C)"
                     >
                       <Copy size={14} />
@@ -2360,7 +2424,7 @@ export default function NeonSynthPad() {
                       onClick={cutSelection}
                       disabled={selectedKeys.size === 0}
                       aria-label="Cut selected notes (Ctrl+X)"
-                      className="seg-item seg-icon"
+                      className="seg-item seg-icon max-md:flex-1"
                       title="Cut (Ctrl+X)"
                     >
                       <Scissors size={14} />
@@ -2370,7 +2434,7 @@ export default function NeonSynthPad() {
                       onClick={() => pasteSelection(false)}
                       disabled={!clipboard}
                       aria-label="Paste notes (Ctrl+V)"
-                      className="seg-item seg-icon"
+                      className="seg-item seg-icon max-md:flex-1"
                       title="Paste (Ctrl+V)"
                     >
                       <ClipboardPaste size={14} />
@@ -2380,7 +2444,7 @@ export default function NeonSynthPad() {
                       onClick={deleteSelectedNotes}
                       disabled={selectedKeys.size === 0}
                       aria-label="Delete selected notes (Delete)"
-                      className="seg-item seg-icon"
+                      className="seg-item seg-icon max-md:flex-1"
                       title="Delete selected (Del)"
                     >
                       <Trash2 size={14} />
@@ -2392,34 +2456,36 @@ export default function NeonSynthPad() {
 
             {/* Phones: forces the row break after view switch + MIDI, whatever the width */}
             <div aria-hidden="true" className="hidden max-md:order-[-9998] max-md:block max-md:h-0 max-md:basis-full" />
+            {/* Sequencer on phones: Export and Import always pair up on their own row */}
+            {viewMode === "roll" && <div aria-hidden="true" className="hidden max-md:block max-md:h-0 max-md:basis-full" />}
             <div className="flex items-center gap-2 max-md:contents">
               <button
                 type="button"
                 onClick={exportSequence}
                 aria-label="Export sequence to JSON file"
-                className="btn max-md:w-10 max-md:shrink-0 max-md:px-0"
+                className={`btn ${viewMode === "roll" ? "max-md:flex-1" : "max-md:w-10 max-md:shrink-0 max-md:px-0"}`}
                 title="Export sequence as JSON"
               >
                 <Download size={14} />
-                <span className="hidden 2xl:inline">Export</span>
+                <span className={`hidden ${viewMode === "roll" ? "max-md:inline " : ""}2xl:inline`}>Export</span>
               </button>
               <label
                 aria-label="Import sequence from JSON file"
-                className="btn max-md:w-10 max-md:shrink-0 max-md:px-0"
+                className={`btn ${viewMode === "roll" ? "max-md:flex-1" : "max-md:w-10 max-md:shrink-0 max-md:px-0"}`}
                 title="Import sequence from JSON"
               >
                 <Upload size={14} />
-                <span className="hidden 2xl:inline">Import</span>
+                <span className={`hidden ${viewMode === "roll" ? "max-md:inline " : ""}2xl:inline`}>Import</span>
                 <input type="file" accept=".json" onChange={importSequence} className="sr-only" />
               </label>
               <div
-                className={`flex items-center gap-1.5 px-1 text-xs max-md:order-first max-md:ml-auto ${
+                className={`flex items-center gap-1.5 px-1 text-xs max-md:order-first max-md:shrink-0 ${
                   midiStatus === "connected" ? "text-t1" : "text-t3"
                 }`}
                 title={`MIDI status: ${midiStatus}`}
               >
                 <Radio size={14} />
-                <span>MIDI</span>
+                <span className="max-[420px]:hidden">MIDI</span>
                 <span className="hidden max-md:inline 2xl:inline text-t3">
                   {midiStatus === "connected"
                     ? "Connected"
@@ -2436,7 +2502,7 @@ export default function NeonSynthPad() {
       </header>
 
       {/* MAIN INSTRUMENT WORKSPACE */}
-      <main className={`flex-1 w-full max-w-[1720px] mx-auto flex flex-col ${viewMode === "pad" ? "min-h-[168px] max-md:max-h-[440px]" : "min-h-[400px]"} max-md:order-2 md:min-h-0`}>
+      <main className={`land-main flex-1 w-full max-w-[1720px] mx-auto flex flex-col ${viewMode === "pad" ? "min-h-[168px] max-md:max-h-[440px]" : "min-h-[400px]"} max-md:order-2 md:min-h-0`}>
         {viewMode === "pad" ? (() => {
           const renderedPads = Array.from({ length: numNotes })
             .map((_, i) => i)
@@ -2525,16 +2591,20 @@ export default function NeonSynthPad() {
                 onMouseUp={() => !editMode && stopNote(i, "mouse")}
                 onMouseLeave={() => !editMode && stopNote(i, "mouse")}
                 onTouchStart={e => {
+                  // In edit mode touches are left to the browser: a swipe scrolls the keybed,
+                  // and only a real tap synthesizes the click that edits the pad
+                  if (editMode) return;
                   e.preventDefault();
-                  if (!editMode) startNote(i, "touch");
+                  startNote(i, "touch");
                 }}
                 onTouchEnd={e => {
+                  if (editMode) return;
                   e.preventDefault();
-                  if (!editMode) stopNote(i, "touch");
+                  stopNote(i, "touch");
                 }}
                 onClick={() => {
                   if (editMode) {
-                    if (bindingIndex === i) toggleNoteDisabled(i);
+                    if (touchPrimary || bindingIndex === i) toggleNoteDisabled(i);
                     else setBindingIndex(i);
                   }
                 }}
@@ -2575,7 +2645,7 @@ export default function NeonSynthPad() {
                   </span>
 
                   {isBinding ? (
-                    <div className="flex flex-col items-center gap-1 text-center">
+                    <div className="flex flex-col items-center gap-1 text-center max-md:hidden">
                       <span
                         className={`rounded-[3px] px-1.5 py-1 text-xs font-medium leading-tight text-balance ${
                           bindingError
@@ -2590,10 +2660,10 @@ export default function NeonSynthPad() {
                       </span>
                     </div>
                   ) : unbound && !editMode && !isDisabled ? (
-                    <span aria-hidden="true" className="h-[22px]" />
+                    <span aria-hidden="true" className="kbd-hint h-[22px]" />
                   ) : (
                     <span
-                      className={`keycap ${isDisabled ? "normal-case" : "uppercase"} ${
+                      className={`keycap ${isDisabled ? "normal-case" : "kbd-hint uppercase"} ${
                         dense ? "!min-w-0 !border-0 !bg-transparent !px-0 !text-[11px]" : ""
                       } ${isActive ? "!border-[#f2efe6] !text-[#f2efe6]" : ""} ${
                         isDisabled ? "!border-transparent !bg-transparent !text-[#878174]" : ""
@@ -2611,7 +2681,7 @@ export default function NeonSynthPad() {
             <div className="flex-1 flex flex-col gap-4 min-h-0">
               {/* Shown only while editing key bindings */}
               {editMode && (
-                <div className="panel flex shrink-0 items-center justify-between gap-3 px-3 py-2 text-[13px] text-t2">
+                <div className="land-hint-card panel flex shrink-0 items-center justify-between gap-3 px-3 py-2 text-[13px] text-t2 max-md:hidden">
                   <span>Click a pad to bind a key. Click it again to mute or unmute.</span>
                   <button
                     type="button"
@@ -2627,8 +2697,19 @@ export default function NeonSynthPad() {
               )}
 
               {/* One continuous keybed; a ruler above it names each octave at its C */}
-              <div className="panel relative flex min-h-0 flex-1 p-3">
-                <div className="flex min-h-0 flex-1 overflow-x-auto md:overflow-x-visible no-scrollbar">
+              <div className="land-keypanel panel relative flex min-h-0 flex-1 p-3 max-md:flex-col">
+                {/* Phones: the edit hint lives inside the keybed panel, so the pads keep their height */}
+                {editMode && (
+                  <p role="status" className="land-hint-line mb-2 shrink-0 text-xs text-t2 md:hidden">
+                    {bindingIndex !== null
+                      ? bindingError ||
+                        `Press a key for ${getNoteName(bindingIndex)}${octave + Math.floor(bindingIndex / 12)}`
+                      : touchPrimary
+                      ? "Tap a pad to mute or unmute it."
+                      : "Click a pad to bind a key; click again to mute."}
+                  </p>
+                )}
+                <div className="keybed-scroll flex min-h-0 flex-1 overflow-x-auto md:overflow-x-visible no-scrollbar">
                   <div
                     role="group"
                     aria-label="Note pads"
@@ -3144,7 +3225,7 @@ export default function NeonSynthPad() {
                     if (e.deltaY < 0) setNumSteps(prev => Math.min(1024, prev + 4));
                     else setNumSteps(prev => Math.max(4, prev - 4));
                   }}
-                  className="cursor-ns-resize"
+                  className="cursor-ns-resize max-md:order-1 max-md:w-full"
                 />
 
                 <Stepper
@@ -3158,6 +3239,7 @@ export default function NeonSynthPad() {
                   incLabel="Zoom in sequencer step width"
                   onDec={() => setStepWidth(prev => Math.max(16, prev - 8))}
                   onInc={() => setStepWidth(prev => Math.min(160, prev + 8))}
+                  className="max-md:order-3 max-md:min-w-0 max-md:flex-1"
                 />
 
                 <div
@@ -3166,14 +3248,14 @@ export default function NeonSynthPad() {
                     if (e.deltaY < 0) setBpm(prev => Math.min(240, prev + 1));
                     else setBpm(prev => Math.max(40, prev - 1));
                   }}
-                  className="stepper cursor-ns-resize"
+                  className="stepper cursor-ns-resize max-md:order-2 max-md:w-full"
                 >
                   <span className="stepper-label">Tempo</span>
                   <div className="stepper-value min-w-[72px] gap-1">
                     {bpm}
                     <span className="font-normal text-t3">BPM</span>
                   </div>
-                  <div className="flex items-center px-3">
+                  <div className="flex items-center px-3 max-md:min-w-0 max-md:flex-1">
                     <input
                       type="range"
                       min="40"
@@ -3184,7 +3266,7 @@ export default function NeonSynthPad() {
                       onMouseUp={e => e.currentTarget.blur()}
                       onChange={e => setBpm(parseInt(e.target.value))}
                       style={{ "--fill": `${((bpm - 40) / 200) * 100}%` } as React.CSSProperties}
-                      className="w-28 hw-slider"
+                      className="w-28 hw-slider max-md:w-full"
                     />
                   </div>
                 </div>
@@ -3194,7 +3276,7 @@ export default function NeonSynthPad() {
                   onClick={() => setAutoScroll(prev => !prev)}
                   aria-pressed={autoScroll}
                   aria-label="Follow playhead"
-                  className="btn"
+                  className="btn max-md:order-4 max-md:shrink-0"
                   title="Scroll the view to follow the playhead during playback"
                 >
                   Follow

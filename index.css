@@ -360,7 +360,7 @@ body,
     border-radius: 3.5px;
     color: var(--t3);
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 500;
     letter-spacing: 0.03em;
     cursor: pointer;
@@ -383,7 +383,7 @@ body,
   .keybed {
     display: grid;
     flex: 1 1 0;
-    min-width: calc(var(--n) * 44px + (var(--n) - 1) * 6px);
+    min-width: calc(var(--n) * var(--pad-w, 44px) + (var(--n) - 1) * 6px);
     column-gap: 6px;
     row-gap: 8px;
     grid-template-columns: repeat(var(--n), minmax(0, 1fr));
@@ -440,10 +440,10 @@ body,
 }
 
 /*
-  Touch sizing: below md every control is 40px (the pads are already 44px wide).
-  Declared after the component layer, so these win at equal specificity.
+  Touch sizing: on phones (portrait below md, and landscape) every control is 40px
+  (the pads are already 44px wide). Declared after the component layer, so these win at equal specificity.
 */
-@media (max-width: 767px) {
+@media (max-width: 767px), (orientation: landscape) and (max-height: 500px) and (max-width: 1024px) {
   .btn,
   .btn-icon,
   .stepper {
@@ -463,12 +463,219 @@ body,
   }
   .seg-item {
     height: 36px; /* + 4px padding and 1px border either side = a 46px control */
-    min-width: 40px;
-    padding: 0 16px;
+    padding: 0 12px;
     border-radius: 6px;
   }
   .seg-icon {
+    min-width: 40px;
     padding: 0;
+  }
+  /* The 36px segment keeps its look but answers touches over a full 40px */
+  .seg-item {
+    position: relative;
+  }
+  .seg-item::before {
+    content: "";
+    position: absolute;
+    inset: -2px 0;
+  }
+  /*
+    Keybed: pads are sized so six and a half show, so the cut-off pad reads as "more this way"
+    rather than as a clipped one, and swipes settle on pad edges.
+  */
+  .keybed-scroll {
+    container-type: inline-size;
+    --pad-w: max(44px, calc((100cqw - 36px) / 6.5));
+    scroll-snap-type: x proximity;
+  }
+  .keybed-scroll .pad {
+    scroll-snap-align: start;
+  }
+}
+
+/* Portrait phones: full-width steppers, the value takes the slack between the two buttons */
+@media (max-width: 767px) {
+  .stepper-value[role="spinbutton"] {
+    flex: 1;
+  }
+}
+
+/* No keyboard on touch-first devices, so the key hints are only noise there */
+@media (hover: none) and (pointer: coarse) {
+  .kbd-hint {
+    display: none;
+  }
+}
+
+/*
+  Landscape phones. Two columns: the readout on the left, the pads (or the roll) on the right
+  at full height. Play and the waveform strip sit directly under them; the encoders and the
+  file / view controls sit one short scroll below. Everything is addressed through .land-*
+  hooks with two-class selectors, so it beats the md: and max-md: utilities at any width.
+*/
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 1024px) {
+  div.land-root {
+    display: grid;
+    grid-template-columns: minmax(260px, 34%) minmax(0, 1fr);
+    grid-template-rows: max(180px, calc(100dvh - 84px)) 52px auto;
+    align-content: start;
+    gap: 8px;
+    height: 100dvh;
+    padding: 8px;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+  div.land-root[data-view="roll"] {
+    grid-template-rows: max(300px, calc(100dvh - 84px)) auto auto;
+  }
+  .land-root > header {
+    display: contents;
+  }
+
+  /* Readout: title block, scope, legend, stacked in the left column */
+  .land-root .land-readout {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 0;
+    padding: 8px;
+  }
+  .land-root .land-r-top {
+    flex: 1 1 auto;
+    flex-direction: column;
+    height: auto;
+    min-height: 0;
+    gap: 6px;
+  }
+  .land-root .land-r-text {
+    width: auto;
+    min-height: 68px;
+    flex-shrink: 0;
+    gap: 4px;
+    justify-content: flex-start;
+  }
+  .land-root .land-title {
+    font-size: 24px;
+  }
+  .land-root .land-r-class {
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 26px;
+  }
+  .land-root .land-live-a {
+    display: none;
+  }
+  .land-root .land-live-b {
+    display: inline-flex;
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    height: 22px;
+  }
+  .land-root .land-scope {
+    flex: 1 1 0;
+    height: auto;
+    min-height: 72px;
+  }
+  .land-root .land-legend {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 8px;
+    min-height: 0;
+    margin: 8px -8px 0;
+    padding: 8px 8px 0;
+  }
+
+  /* Controls: the section dissolves so each piece takes its own grid cell */
+  .land-root .land-ctl,
+  .land-root .land-ctl-top {
+    display: contents;
+  }
+  .land-root .land-play {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: start;
+    flex-direction: row;
+    gap: 8px;
+    width: 100%;
+    height: 52px;
+  }
+  .land-root .land-waves {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: start;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: auto;
+    height: 52px;
+  }
+  .land-root .land-waves .wave {
+    gap: 4px;
+  }
+  .land-root .land-dials {
+    grid-column: 1;
+    grid-row: 3;
+    padding-block: 6px;
+  }
+  /* Narrow left columns: the nudge buttons give up a few px before they touch the cell dividers */
+  .land-root .land-dials .btn-icon {
+    flex: 0 1 40px;
+    width: auto;
+    min-width: 32px;
+  }
+  .land-root .land-ctl-bar {
+    grid-column: 2;
+    grid-row: 3;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-panel);
+    background: var(--s1);
+  }
+  /* Sequencer: tools and Play stay next to the roll, waveform and encoders drop below */
+  .land-root[data-view="roll"] .land-ctl-bar {
+    grid-row: 2;
+  }
+  .land-root[data-view="roll"] .land-play {
+    align-self: stretch;
+    height: auto;
+    min-height: 52px;
+    max-height: 96px;
+  }
+  .land-root[data-view="roll"] .land-waves {
+    grid-column: 2;
+    grid-row: 3;
+  }
+  .land-root[data-view="roll"] .land-dials {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  /* Instrument */
+  .land-root .land-main {
+    grid-column: 2;
+    grid-row: 1;
+    width: 100%;
+    max-width: none;
+    min-height: 0;
+    max-height: none;
+    margin: 0;
+  }
+  .land-root .land-hint-card {
+    display: none;
+  }
+  .land-root .land-keypanel {
+    flex-direction: column;
+  }
+  .land-root .land-hint-line {
+    display: block;
+  }
+  .land-root .keybed-scroll {
+    overflow-x: auto;
+    --pad-w: max(44px, calc((100cqw - 48px) / 8.5));
+  }
+  .land-root .keybed {
+    min-width: calc(var(--n) * var(--pad-w, 44px) + (var(--n) - 1) * 6px);
   }
 }
 
@@ -536,7 +743,7 @@ input[type="range"].hw-slider::-moz-range-thumb {
 }
 
 /* Touch: keep the 4px track, but give the slider a 40px-tall hit area */
-@media (max-width: 767px) {
+@media (max-width: 767px), (orientation: landscape) and (max-height: 500px) and (max-width: 1024px) {
   input[type="range"].hw-slider {
     box-sizing: content-box;
     padding: 18px 0;

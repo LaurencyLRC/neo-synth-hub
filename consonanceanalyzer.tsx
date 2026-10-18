@@ -2075,7 +2075,7 @@ export default function NeonSynthPad() {
       <header className="w-full max-w-[1720px] mx-auto grid grid-cols-1 lg:grid-cols-2 gap-3 md:gap-4 shrink-0 z-30 max-md:contents">
         {/* Left: harmonic readout, vector scope, legend */}
         <section aria-label="Harmonic readout" className="panel p-3 flex flex-col max-md:order-1 max-md:shrink-0">
-          <div className="flex flex-col gap-3 max-md:gap-2 md:h-[152px] md:flex-row">
+          <div className="flex flex-col gap-3 md:h-[152px] md:flex-row">
             <div className="relative flex min-w-0 flex-col justify-between gap-4 max-md:min-h-[80px] max-md:gap-1.5 md:w-[232px] md:shrink-0 md:gap-0">
               <div className="min-w-0 max-md:flex-1">
                 {interval ? (
@@ -2146,12 +2146,12 @@ export default function NeonSynthPad() {
               {liveTag("md:hidden", "max-md:absolute max-md:bottom-0 max-md:right-0 max-md:h-[22px]")}
             </div>
 
-            <div className="well relative h-[clamp(72px,9dvh,140px)] min-w-0 overflow-hidden md:h-auto md:flex-1">
+            <div className="well relative h-[clamp(104px,14dvh,220px)] min-w-0 overflow-hidden md:h-auto md:flex-1">
               <HarmonicVisualizer interval={interval} />
             </div>
           </div>
 
-          <div className="mt-3 -mx-3 grid grid-cols-2 gap-x-2 gap-y-2 border-t rule px-3 pt-3 box-content max-md:mt-2 max-md:flex max-md:flex-wrap max-md:justify-between max-md:gap-y-1 max-md:pt-2 md:flex md:min-h-[28px] md:flex-wrap md:items-center md:gap-x-5 md:gap-y-1.5">
+          <div className="mt-3 -mx-3 grid grid-cols-2 gap-x-2 gap-y-2 border-t rule px-3 pt-3 box-content max-md:mt-3 max-md:flex max-md:flex-wrap max-md:justify-between max-md:gap-y-1 max-md:pt-3 md:flex md:min-h-[28px] md:flex-wrap md:items-center md:gap-x-5 md:gap-y-1.5">
             {LEGEND.map(({ bucket, label, hint }) => (
               <span
                 key={bucket}
@@ -2436,7 +2436,7 @@ export default function NeonSynthPad() {
       </header>
 
       {/* MAIN INSTRUMENT WORKSPACE */}
-      <main className={`flex-1 w-full max-w-[1720px] mx-auto flex flex-col ${viewMode === "pad" ? "min-h-[168px] max-md:max-h-[340px]" : "min-h-[400px]"} max-md:order-2 md:min-h-0`}>
+      <main className={`flex-1 w-full max-w-[1720px] mx-auto flex flex-col ${viewMode === "pad" ? "min-h-[168px] max-md:max-h-[440px]" : "min-h-[400px]"} max-md:order-2 md:min-h-0`}>
         {viewMode === "pad" ? (() => {
           const renderedPads = Array.from({ length: numNotes })
             .map((_, i) => i)

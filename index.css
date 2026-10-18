@@ -455,9 +455,20 @@ body,
     width: 40px;
     flex-shrink: 0;
   }
+  /* Segmented controls: a roomier frame so the selected segment floats, as it does on desktop */
+  .seg {
+    gap: 4px;
+    padding: 4px;
+    border-radius: 11px;
+  }
   .seg-item {
-    height: 38px; /* + 2px padding and 1px border either side = a 44px control */
+    height: 36px; /* + 4px padding and 1px border either side = a 46px control */
     min-width: 40px;
+    padding: 0 16px;
+    border-radius: 6px;
+  }
+  .seg-icon {
+    padding: 0;
   }
 }
 

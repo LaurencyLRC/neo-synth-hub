@@ -488,8 +488,10 @@ body,
   */
   .keybed-scroll {
     container-type: inline-size;
-    --pad-w: max(44px, calc((100cqw - 36px) / 6.5));
     scroll-snap-type: x proximity;
+  }
+  .keybed-scroll .keybed {
+    --pad-w: max(44px, calc((100cqw - 36px) / 6.5));
   }
   .keybed-scroll .pad {
     scroll-snap-align: start;
@@ -675,9 +677,9 @@ body,
   }
   .land-root .keybed-scroll {
     overflow-x: auto;
-    --pad-w: max(44px, calc((100cqw - 48px) / 8.5));
   }
   .land-root .keybed {
+    --pad-w: max(44px, calc((100cqw - 48px) / 8.5));
     min-width: calc(var(--n) * var(--pad-w, 44px) + (var(--n) - 1) * 6px);
   }
   /* Sequencer: the bar is beside the roll here, so the roll footer drops its phone duplicates */

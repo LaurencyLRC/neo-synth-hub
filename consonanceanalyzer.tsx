@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "react";
 import {
   Settings2,
   Eye,
@@ -489,7 +489,7 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
     }
   }, [interval]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -575,7 +575,7 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
       ctx.stroke();
     };
 
-    const render = (time: number) => {
+    const drawFrame = (time: number) => {
       if (!running) return;
       const rawDt = Math.min((time - lastTime) / 1000, 0.08);
       const dt = rawDt; // the scope's motion is the measurement, so it is not frozen by reduced-motion settings
@@ -979,13 +979,26 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
       }
 
       ctx.restore();
-      animIdRef.current = requestAnimationFrame(render);
     };
 
-    animIdRef.current = requestAnimationFrame(render);
+    const tick = (time: number) => {
+      if (!running) return;
+      drawFrame(time);
+      animIdRef.current = requestAnimationFrame(tick);
+    };
+
+    // Draw synchronously before paint so view-switch height changes never stretch the old bitmap
+    drawFrame(performance.now());
+    animIdRef.current = requestAnimationFrame(tick);
+
+    const ro = new ResizeObserver(() => {
+      if (running) drawFrame(performance.now());
+    });
+    ro.observe(canvas);
 
     return () => {
       running = false;
+      ro.disconnect();
       if (animIdRef.current) cancelAnimationFrame(animIdRef.current);
     };
   }, [interval, orbitData]);
@@ -1306,18 +1319,6 @@ export default function NeonSynthPad() {
     height: 0,
   });
 
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const updateSize = () => {
-      setContainerSize({ width: el.clientWidth, height: el.clientHeight });
-    };
-    updateSize();
-    const ro = new ResizeObserver(updateSize);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [viewMode]);
-
   const containerWidth = containerSize.width;
   const availRollHeight = Math.max(320, (containerSize.height || 500) - 32);
   const baseRowHeight =
@@ -1341,31 +1342,65 @@ export default function NeonSynthPad() {
     return stepWidth;
   }, [containerWidth, numSteps, stepWidth]);
 
-  const updateViewport = useCallback(() => {
-    if (!scrollRef.current) return;
-    const { scrollLeft, clientWidth } = scrollRef.current;
-    const start = Math.max(0, Math.floor((scrollLeft - 52) / effectiveStepWidth) - 2);
-    const end = Math.min(numSteps, Math.ceil((clientWidth + scrollLeft - 52) / effectiveStepWidth) + 2);
-    setViewportSteps({ start, end });
-  }, [effectiveStepWidth, numSteps]);
+  const updateViewport = useCallback(
+    (overrideStepWidth?: number) => {
+      if (!scrollRef.current) return;
+      const sw = typeof overrideStepWidth === "number" ? overrideStepWidth : effectiveStepWidth;
+      const { scrollLeft, clientWidth } = scrollRef.current;
+      const start = Math.max(0, Math.floor((scrollLeft - 52) / sw) - 2);
+      const end = Math.min(numSteps, Math.ceil((clientWidth + scrollLeft - 52) / sw) + 2);
+      setViewportSteps(prev =>
+        prev.start === start && prev.end === end ? prev : { start, end }
+      );
+    },
+    [effectiveStepWidth, numSteps]
+  );
 
-  useEffect(() => {
-    updateViewport();
-  }, [viewMode, numSteps, effectiveStepWidth, updateViewport]);
+  // Measure roll container, compute viewport window, and position scroll BEFORE first paint
+  const needsInitialScrollRef = useRef(false);
 
-  useEffect(() => {
-    if (viewMode === "roll") {
-      setEditMode(false);
-      setBindingIndex(null);
-      setPasteAnchor(0);
-    }
-  }, [viewMode]);
+  const switchViewMode = useCallback((nextMode: "pad" | "roll") => {
+    setViewMode(prev => {
+      if (prev === nextMode) return prev;
+      if (nextMode === "roll") {
+        needsInitialScrollRef.current = true;
+        setEditMode(false);
+        setBindingIndex(null);
+        setPasteAnchor(0);
+      }
+      return nextMode;
+    });
+  }, []);
 
-  useEffect(() => {
-    if (viewMode === "roll" && scrollRef.current) {
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const measureAndSync = () => {
+      const width = el.clientWidth;
+      const height = el.clientHeight;
+      setContainerSize(prev =>
+        prev.width === width && prev.height === height ? prev : { width, height }
+      );
+
+      const nextAutoW =
+        width > 120 && numSteps > 0 ? Math.floor((width - 54) / numSteps) : stepWidth;
+      const nextEffectiveW = Math.max(stepWidth, nextAutoW);
+      updateViewport(nextEffectiveW);
+    };
+
+    measureAndSync();
+    const ro = new ResizeObserver(measureAndSync);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [viewMode, numSteps, stepWidth, updateViewport]);
+
+  useLayoutEffect(() => {
+    if (viewMode === "roll" && needsInitialScrollRef.current && scrollRef.current && containerSize.height > 0) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      needsInitialScrollRef.current = false;
     }
-  }, [viewMode]);
+  }, [viewMode, containerSize.height, rowHeight]);
 
   useEffect(() => {
     if (!isPlaying || !autoScroll || !scrollRef.current) return;
@@ -2515,7 +2550,7 @@ export default function NeonSynthPad() {
               <div className="seg max-md:order-first max-md:min-w-0 max-md:flex-1" role="group" aria-label="Surface">
                 <button
                   type="button"
-                  onClick={() => setViewMode("pad")}
+                  onClick={() => switchViewMode("pad")}
                   aria-pressed={viewMode === "pad"}
                   className="seg-item max-md:flex-1"
                   title="Harmonic pad view"
@@ -2524,7 +2559,7 @@ export default function NeonSynthPad() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setViewMode("roll")}
+                  onClick={() => switchViewMode("roll")}
                   aria-pressed={viewMode === "roll"}
                   className="seg-item max-md:flex-1"
                   title="Piano roll sequencer"

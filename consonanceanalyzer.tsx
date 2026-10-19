@@ -426,7 +426,10 @@ const ConsonanceGlyph: React.FC<{
   );
 };
 
-export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = ({ interval }) => {
+export const HarmonicVisualizer: React.FC<{
+  interval: IntervalInfo | null;
+  viewMode?: "pad" | "roll";
+}> = ({ interval, viewMode }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animIdRef = useRef<number | null>(null);
   const phaseRef = useRef<number>(0);
@@ -1000,7 +1003,7 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
       ro.disconnect();
       if (animIdRef.current) cancelAnimationFrame(animIdRef.current);
     };
-  }, [interval, orbitData]);
+  }, [interval, orbitData, viewMode]);
 
   return (
     <canvas
@@ -1386,6 +1389,11 @@ export default function NeonSynthPad() {
         width > 120 && numSteps > 0 ? Math.floor((width - 54) / numSteps) : stepWidth;
       const nextEffectiveW = Math.max(stepWidth, nextAutoW);
       updateViewport(nextEffectiveW);
+
+      if (viewMode === "roll" && needsInitialScrollRef.current && height > 0) {
+        el.scrollTop = el.scrollHeight;
+        needsInitialScrollRef.current = false;
+      }
     };
 
     measureAndSync();
@@ -2438,7 +2446,7 @@ export default function NeonSynthPad() {
             </div>
 
             <div className={`land-scope well relative min-w-0 overflow-hidden md:h-auto md:flex-1 ${viewMode === "roll" ? "max-md:h-[clamp(72px,calc(var(--app-h,100dvh)*0.09),120px)]" : "max-md:h-[clamp(104px,calc(var(--app-h,100dvh)*0.14),220px)]"}`}>
-              <HarmonicVisualizer interval={interval} />
+              <HarmonicVisualizer interval={interval} viewMode={viewMode} />
             </div>
           </div>
 

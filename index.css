@@ -138,15 +138,6 @@ body,
     line-height: 1;
     white-space: nowrap;
     cursor: pointer;
-    transition:
-      background-color 140ms var(--ease-out),
-      color 140ms var(--ease-out),
-      border-color 140ms var(--ease-out);
-  }
-  .btn:hover:not(:disabled) {
-    background: var(--s3);
-    border-color: var(--line-2);
-    color: var(--t1);
   }
   .btn[aria-pressed="true"] {
     background: var(--s4);
@@ -168,10 +159,6 @@ body,
     border-color: transparent;
     color: #0b0d0b;
     font-weight: 600;
-  }
-  .btn-primary:hover:not(:disabled) {
-    background: #ffffff;
-    color: #0b0d0b;
   }
   .btn:focus-within {
     outline: 2px solid var(--t1);
@@ -202,13 +189,6 @@ body,
     line-height: 1;
     white-space: nowrap;
     cursor: pointer;
-    transition:
-      background-color 140ms var(--ease-out),
-      color 140ms var(--ease-out),
-      box-shadow 140ms var(--ease-out);
-  }
-  .seg-item:hover:not(:disabled) {
-    color: var(--t1);
   }
   .seg-item[aria-pressed="true"] {
     background: var(--s4);
@@ -271,10 +251,6 @@ body,
     transition:
       background-color 140ms var(--ease-out),
       color 140ms var(--ease-out);
-  }
-  .stepper-btn:hover {
-    background: var(--s3);
-    color: var(--t1);
   }
 
   /* Hardware keycap badge & active voice chip */
@@ -340,10 +316,6 @@ body,
       color 140ms var(--ease-out),
       border-color 140ms var(--ease-out);
   }
-  .transport:hover {
-    background: var(--s4);
-    border-color: var(--line-bright);
-  }
   .transport[data-playing="true"] {
     background: var(--t1);
     border-color: transparent;
@@ -369,10 +341,6 @@ body,
       background-color 140ms var(--ease-out),
       color 140ms var(--ease-out),
       box-shadow 140ms var(--ease-out);
-  }
-  .wave:hover {
-    color: var(--t1);
-    background: rgba(255, 252, 240, 0.025);
   }
   .wave[aria-checked="true"] {
     background: var(--s4);
@@ -421,7 +389,32 @@ body,
     pointer-events: none;
     transition: background-color 120ms var(--ease-out);
   }
+  /* Gate hover states so touch taps on mobile don't leave sticky highlights */
   @media (hover: hover) and (pointer: fine) {
+    .btn:hover:not(:disabled) {
+      background: var(--s3);
+      border-color: var(--line-2);
+      color: var(--t1);
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: #ffffff;
+      color: #0b0d0b;
+    }
+    .seg-item:hover:not(:disabled) {
+      color: var(--t1);
+    }
+    .stepper-btn:hover {
+      background: var(--s3);
+      color: var(--t1);
+    }
+    .transport:hover {
+      background: var(--s4);
+      border-color: var(--line-bright);
+    }
+    .wave:hover {
+      color: var(--t1);
+      background: rgba(255, 252, 240, 0.025);
+    }
     .pad:hover::after {
       background: rgba(242, 239, 230, 0.035);
     }

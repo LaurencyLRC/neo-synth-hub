@@ -2079,6 +2079,20 @@ export default function NeonSynthPad() {
     []
   );
 
+  // Phone browsers disagree about what 100dvh/100vh means once the toolbar is involved (some count the area
+  // under it, so the page ends below the visible screen). innerHeight is what the page can really see.
+  useEffect(() => {
+    const setAppHeight = () =>
+      document.documentElement.style.setProperty("--app-h", `${window.innerHeight}px`);
+    setAppHeight();
+    window.addEventListener("resize", setAppHeight);
+    window.addEventListener("orientationchange", setAppHeight);
+    return () => {
+      window.removeEventListener("resize", setAppHeight);
+      window.removeEventListener("orientationchange", setAppHeight);
+    };
+  }, []);
+
   // Maps a screen point to a roll cell. `inside` is false over the key labels, the ruler and outside the grid.
   const locateCell = (clientX: number, clientY: number) => {
     const el = scrollRef.current;
@@ -2276,7 +2290,7 @@ export default function NeonSynthPad() {
   return (
     <div
       data-view={viewMode}
-      className="land-root relative flex h-[100dvh] w-screen max-md:w-full flex-col gap-3 overflow-y-auto overflow-x-hidden p-3 text-t1 select-none max-md:gap-2 max-md:py-2 md:h-screen md:gap-4 md:overflow-hidden md:p-4"
+      className="land-root relative flex h-[var(--app-h,100dvh)] w-screen max-md:w-full flex-col gap-3 overflow-y-auto overflow-x-hidden p-3 text-t1 select-none max-md:gap-2 max-md:py-2 md:h-[var(--app-h,100vh)] md:gap-4 md:overflow-hidden md:p-4"
     >
       {/* Audio & WebMIDI initialization dialog */}
       {!hasInteracted && (
@@ -2389,7 +2403,7 @@ export default function NeonSynthPad() {
               {liveTag("md:hidden", "land-live-b max-md:absolute max-md:bottom-0 max-md:right-0 max-md:h-[22px]")}
             </div>
 
-            <div className={`land-scope well relative min-w-0 overflow-hidden md:h-auto md:flex-1 ${viewMode === "roll" ? "max-md:h-[clamp(72px,9dvh,120px)]" : "max-md:h-[clamp(104px,14dvh,220px)]"}`}>
+            <div className={`land-scope well relative min-w-0 overflow-hidden md:h-auto md:flex-1 ${viewMode === "roll" ? "max-md:h-[clamp(72px,calc(var(--app-h,100dvh)*0.09),120px)]" : "max-md:h-[clamp(104px,calc(var(--app-h,100dvh)*0.14),220px)]"}`}>
               <HarmonicVisualizer interval={interval} />
             </div>
           </div>
@@ -2610,7 +2624,7 @@ export default function NeonSynthPad() {
       </header>
 
       {/* MAIN INSTRUMENT WORKSPACE */}
-      <main className={`land-main flex-1 w-full max-w-[1720px] mx-auto flex flex-col ${viewMode === "pad" ? "min-h-[168px] max-md:max-h-[440px]" : "min-h-[400px] max-md:min-h-[max(400px,calc(100dvh-254px))]"} max-md:order-2 md:min-h-0`}>
+      <main className={`land-main flex-1 w-full max-w-[1720px] mx-auto flex flex-col ${viewMode === "pad" ? "min-h-[168px] max-md:max-h-[440px]" : "min-h-[400px] max-md:min-h-[max(400px,calc(var(--app-h,100dvh)-254px))]"} max-md:order-2 md:min-h-0`}>
         {viewMode === "pad" ? (() => {
           const renderedPads = Array.from({ length: numNotes })
             .map((_, i) => i)

@@ -2276,7 +2276,7 @@ export default function NeonSynthPad() {
   return (
     <div
       data-view={viewMode}
-      className="land-root flex h-[100dvh] w-screen flex-col gap-3 overflow-y-auto overflow-x-hidden p-3 text-t1 select-none max-md:gap-2 max-md:py-2 md:h-screen md:gap-4 md:overflow-hidden md:p-4"
+      className="land-root relative flex h-[100dvh] w-screen max-md:w-full flex-col gap-3 overflow-y-auto overflow-x-hidden p-3 text-t1 select-none max-md:gap-2 max-md:py-2 md:h-screen md:gap-4 md:overflow-hidden md:p-4"
     >
       {/* Audio & WebMIDI initialization dialog */}
       {!hasInteracted && (
@@ -2610,7 +2610,7 @@ export default function NeonSynthPad() {
       </header>
 
       {/* MAIN INSTRUMENT WORKSPACE */}
-      <main className={`land-main flex-1 w-full max-w-[1720px] mx-auto flex flex-col ${viewMode === "pad" ? "min-h-[168px] max-md:max-h-[440px]" : "min-h-[400px] max-md:min-h-[520px]"} max-md:order-2 md:min-h-0`}>
+      <main className={`land-main flex-1 w-full max-w-[1720px] mx-auto flex flex-col ${viewMode === "pad" ? "min-h-[168px] max-md:max-h-[440px]" : "min-h-[400px] max-md:min-h-[max(400px,calc(100dvh-254px))]"} max-md:order-2 md:min-h-0`}>
         {viewMode === "pad" ? (() => {
           const renderedPads = Array.from({ length: numNotes })
             .map((_, i) => i)
@@ -3308,7 +3308,7 @@ export default function NeonSynthPad() {
 
               {/* Sequencer footer: pattern length, zoom, tempo, follow. Chord level sits at the far end. */}
               <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-[#131613] border-t border-[#dad2be]/[0.12] z-40 shrink-0 max-md:grid max-md:grid-cols-12">
-                {/* Phones: tools and Play sit right under the roll */}
+                {/* Phones: the tools sit right under the roll */}
                 {renderRollTools(
                   "roll-foot md:hidden max-md:col-span-5 max-[350px]:col-span-12",
                   "roll-foot md:hidden max-md:col-span-7 max-[350px]:col-span-12"
@@ -3351,24 +3351,13 @@ export default function NeonSynthPad() {
                   className="max-md:col-span-6 max-md:min-w-0 max-[350px]:col-span-12"
                 />
 
-                <button
-                  type="button"
-                  onClick={() => setIsPlaying(!isPlaying)}
-                  aria-pressed={isPlaying}
-                  aria-label={isPlaying ? "Stop sequence playback" : "Start sequence playback"}
-                  title="Play or stop (Space)"
-                  className="btn btn-icon roll-foot justify-self-start md:hidden max-md:col-span-2"
-                >
-                  {isPlaying ? <Square size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
-                </button>
-
                 <div
                   onMouseDown={startNumericDrag(bpm, setBpm, 40, 240, 3)}
                   onWheel={e => {
                     if (e.deltaY < 0) setBpm(prev => Math.min(240, prev + 1));
                     else setBpm(prev => Math.max(40, prev - 1));
                   }}
-                  className="stepper roll-tempo cursor-ns-resize max-md:col-span-7 max-md:min-w-0"
+                  className="stepper cursor-ns-resize max-md:col-span-9 max-md:min-w-0"
                 >
                   <span className="stepper-label max-md:hidden">Tempo</span>
                   <div className="stepper-value min-w-[72px] gap-1">

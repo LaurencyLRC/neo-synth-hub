@@ -646,7 +646,6 @@ export const HarmonicVisualizer: React.FC<{ interval: IntervalInfo | null }> = (
         ctx.stroke();
 
         ctx.restore();
-        animIdRef.current = requestAnimationFrame(render);
         return;
       }
 

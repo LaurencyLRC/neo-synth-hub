@@ -336,7 +336,7 @@ const Stepper: React.FC<StepperProps> = ({
   ...rest
 }) => (
   <div className={`stepper ${className}`} {...rest}>
-    <span className="stepper-label">{label}</span>
+    <span className="stepper-label max-md:hidden">{label}</span>
     <button type="button" onClick={onDec} aria-label={decLabel} className="stepper-btn">
       <Minus size={14} />
     </button>
@@ -346,8 +346,9 @@ const Stepper: React.FC<StepperProps> = ({
       aria-valuenow={value}
       aria-valuemin={min}
       aria-valuemax={max}
-      className="stepper-value"
+      className="stepper-value max-md:px-1.5"
     >
+      <span className="stepper-inline-label mr-1 font-normal text-t3 md:hidden">{label}</span>
       {display}
     </div>
     <button type="button" onClick={onInc} aria-label={incLabel} className="stepper-btn">
@@ -2078,6 +2079,185 @@ export default function NeonSynthPad() {
     []
   );
 
+  // Maps a screen point to a roll cell. `inside` is false over the key labels, the ruler and outside the grid.
+  const locateCell = (clientX: number, clientY: number) => {
+    const el = scrollRef.current;
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    const x = clientX - rect.left + el.scrollLeft - 52;
+    const y = clientY - rect.top;
+    const totalContentHeight = renderedNoteIndices.length * rowHeight;
+    const pianoRollTop = 32;
+    const step = Math.floor(x / effectiveStepWidth);
+    const renderedIdx = Math.floor((totalContentHeight - (y + el.scrollTop - pianoRollTop)) / rowHeight);
+    const note = renderedNoteIndices[renderedIdx];
+    const inside =
+      step >= 0 && step < numSteps && renderedIdx >= 0 && renderedIdx < renderedNoteIndices.length;
+    return { step, renderedIdx, note, inside };
+  };
+
+  // Touch in Select mode: tap a note to toggle it in the selection (tap empty space to clear it),
+  // drag a selected note to move the whole selection. Dragging anywhere else still scrolls the roll.
+  const touchGestureRef = useRef<{
+    x: number;
+    y: number;
+    step: number;
+    note: number;
+    onSelected: boolean;
+    moved: boolean;
+  } | null>(null);
+
+  const cancelTouchDrag = () => {
+    touchGestureRef.current = null;
+    setIsDragging(false);
+    setDragOffset(null);
+    setDragStartPos(null);
+  };
+
+  const handleRollTouchStart = (e: React.TouchEvent) => {
+    if (editTool !== "select") return;
+    const t = e.touches[0];
+    const loc = e.touches.length === 1 && t ? locateCell(t.clientX, t.clientY) : null;
+    if (!t || !loc || !loc.inside) {
+      touchGestureRef.current = null;
+      return;
+    }
+    touchGestureRef.current = {
+      x: t.clientX,
+      y: t.clientY,
+      step: loc.step,
+      note: loc.note,
+      onSelected: selectedKeys.has(`${loc.step}-${loc.note}`),
+      moved: false,
+    };
+  };
+
+  const handleRollTouchMove = (e: React.TouchEvent) => {
+    const g = touchGestureRef.current;
+    const t = e.touches[0];
+    if (!g || !t) return;
+    if (e.touches.length !== 1) {
+      cancelTouchDrag();
+      return;
+    }
+    if (!g.moved && Math.hypot(t.clientX - g.x, t.clientY - g.y) < 8) return;
+    g.moved = true;
+    if (!g.onSelected) return; // not on a selected note: the browser is scrolling
+    const loc = locateCell(t.clientX, t.clientY);
+    if (!loc || loc.note === undefined) return;
+    if (!isDragging) {
+      setIsDragging(true);
+      setDragStartPos({ s: g.step, n: g.note });
+    }
+    setDragOffset({ ds: loc.step - g.step, dn: loc.note - g.note });
+  };
+
+  const handleRollTouchEnd = (e: React.TouchEvent) => {
+    const g = touchGestureRef.current;
+    touchGestureRef.current = null;
+    if (!g) return;
+    if (isDragging) {
+      finishPointerRef.current();
+    } else if (!g.moved) {
+      const key = `${g.step}-${g.note}`;
+      if (sequencerNotes.has(key)) {
+        setSelectedKeys(prev => {
+          const next = new Set(prev);
+          if (next.has(key)) next.delete(key);
+          else next.add(key);
+          return next;
+        });
+      } else {
+        setSelectedKeys(new Set());
+      }
+    }
+    // The tap is handled here; without this the browser repeats it as a mouse click (which would restart a marquee).
+    if (e.cancelable) e.preventDefault();
+  };
+
+  // Draw / chord / select and the clipboard. Rendered twice: in the control bar (desktop, landscape)
+  // and in the roll footer on portrait phones, where the bar sits two screens below the roll.
+  const renderRollTools = (editCls: string, clipCls: string) => (
+    <>
+      <div className={`seg ${editCls}`} role="group" aria-label="Edit tool">
+                    <button
+                      type="button"
+                      onClick={() => setEditTool("draw")}
+                      aria-pressed={editTool === "draw"}
+                      className="seg-item max-md:flex-1 max-md:px-2.5"
+                      title="Draw lead note"
+                    >
+                      <Pencil size={14} />
+                      <span className="hidden min-[1440px]:inline">Draw</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditTool("chord")}
+                      aria-pressed={editTool === "chord"}
+                      className="seg-item max-md:flex-1 max-md:px-2.5"
+                      title="Draw backing chord note"
+                    >
+                      <Layers size={14} />
+                      <span className="hidden min-[1440px]:inline">Chord</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditTool("select")}
+                      aria-pressed={editTool === "select"}
+                      aria-label="Marquee select tool"
+                      className="seg-item max-md:flex-1 max-md:px-2.5"
+                      title="Marquee select tool"
+                    >
+                      <BoxSelect size={14} />
+                      <span className="hidden min-[1440px]:inline">Select</span>
+                    </button>
+                  </div>
+
+                  <div className={`seg ${clipCls}`} role="group" aria-label="Clipboard">
+                    <button
+                      type="button"
+                      onClick={copySelection}
+                      disabled={selectedKeys.size === 0}
+                      aria-label="Copy selected notes (Ctrl+C)"
+                      className="seg-item seg-icon max-md:w-auto max-md:min-w-0 max-md:flex-1 max-md:shrink"
+                      title="Copy (Ctrl+C)"
+                    >
+                      <Copy size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cutSelection}
+                      disabled={selectedKeys.size === 0}
+                      aria-label="Cut selected notes (Ctrl+X)"
+                      className="seg-item seg-icon max-md:w-auto max-md:min-w-0 max-md:flex-1 max-md:shrink"
+                      title="Cut (Ctrl+X)"
+                    >
+                      <Scissors size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => pasteSelection(false)}
+                      disabled={!clipboard}
+                      aria-label="Paste notes (Ctrl+V)"
+                      className="seg-item seg-icon max-md:w-auto max-md:min-w-0 max-md:flex-1 max-md:shrink"
+                      title="Paste (Ctrl+V)"
+                    >
+                      <ClipboardPaste size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={deleteSelectedNotes}
+                      disabled={selectedKeys.size === 0}
+                      aria-label="Delete selected notes (Delete)"
+                      className="seg-item seg-icon max-md:w-auto max-md:min-w-0 max-md:flex-1 max-md:shrink"
+                      title="Delete selected (Del)"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+    </>
+  );
+
   const cellHover = hoveredCell && hoveredCell.note >= 0 ? hoveredCell : null;
 
   const sortedIntervalPitches = interval
@@ -2209,12 +2389,12 @@ export default function NeonSynthPad() {
               {liveTag("md:hidden", "land-live-b max-md:absolute max-md:bottom-0 max-md:right-0 max-md:h-[22px]")}
             </div>
 
-            <div className="land-scope well relative h-[clamp(104px,14dvh,220px)] min-w-0 overflow-hidden md:h-auto md:flex-1">
+            <div className={`land-scope well relative min-w-0 overflow-hidden md:h-auto md:flex-1 ${viewMode === "roll" ? "max-md:h-[clamp(72px,9dvh,120px)]" : "max-md:h-[clamp(104px,14dvh,220px)]"}`}>
               <HarmonicVisualizer interval={interval} />
             </div>
           </div>
 
-          <div className="land-legend mt-3 -mx-3 grid grid-cols-2 gap-x-2 gap-y-2 border-t rule px-3 pt-3 box-content max-md:mt-3 max-md:flex max-md:flex-wrap max-md:justify-between max-md:gap-y-1 max-md:pt-3 md:flex md:min-h-[28px] md:flex-wrap md:items-center md:gap-x-5 md:gap-y-1.5">
+          <div className={`land-legend mt-3 -mx-3 grid grid-cols-2 gap-x-2 gap-y-2 border-t rule px-3 pt-3 box-content max-md:flex max-md:flex-wrap max-md:justify-between max-md:gap-y-1 ${viewMode === "roll" ? "max-md:mt-2 max-md:pt-2" : "max-md:mt-3 max-md:pt-3"} md:flex md:min-h-[28px] md:flex-wrap md:items-center md:gap-x-5 md:gap-y-1.5`}>
             {LEGEND.map(({ bucket, label, hint }) => (
               <span
                 key={bucket}
@@ -2222,7 +2402,7 @@ export default function NeonSynthPad() {
                 title={`${label}: ${hint}`}
               >
                 <ConsonanceGlyph bucket={bucket} size={14} />
-                {label}
+                <span className="trim-caps">{label}</span>
               </span>
             ))}
           </div>
@@ -2309,7 +2489,7 @@ export default function NeonSynthPad() {
                   className="wave max-md:gap-1"
                 >
                   <WaveGlyph type={t} />
-                  <span>{WAVE_SHORT[t]}</span>
+                  <span className="trim-caps">{WAVE_SHORT[t]}</span>
                 </button>
               ))}
             </div>
@@ -2374,90 +2554,18 @@ export default function NeonSynthPad() {
 
               {viewMode === "roll" && (
                 <>
-                  <div className="seg max-md:my-0.5 max-md:flex-[3]" role="group" aria-label="Edit tool">
-                    <button
-                      type="button"
-                      onClick={() => setEditTool("draw")}
-                      aria-pressed={editTool === "draw"}
-                      className="seg-item max-md:flex-1"
-                      title="Draw lead note"
-                    >
-                      <Pencil size={14} />
-                      <span className="hidden min-[1440px]:inline">Draw</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditTool("chord")}
-                      aria-pressed={editTool === "chord"}
-                      className="seg-item max-md:flex-1"
-                      title="Draw backing chord note"
-                    >
-                      <Layers size={14} />
-                      <span className="hidden min-[1440px]:inline">Chord</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditTool("select")}
-                      aria-pressed={editTool === "select"}
-                      aria-label="Marquee select tool"
-                      className="seg-item max-md:flex-1"
-                      title="Marquee select tool"
-                    >
-                      <BoxSelect size={14} />
-                      <span className="hidden min-[1440px]:inline">Select</span>
-                    </button>
-                  </div>
-
-                  <div className="seg max-md:my-0.5 max-md:flex-[4]" role="group" aria-label="Clipboard">
-                    <button
-                      type="button"
-                      onClick={copySelection}
-                      disabled={selectedKeys.size === 0}
-                      aria-label="Copy selected notes (Ctrl+C)"
-                      className="seg-item seg-icon max-md:flex-1"
-                      title="Copy (Ctrl+C)"
-                    >
-                      <Copy size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={cutSelection}
-                      disabled={selectedKeys.size === 0}
-                      aria-label="Cut selected notes (Ctrl+X)"
-                      className="seg-item seg-icon max-md:flex-1"
-                      title="Cut (Ctrl+X)"
-                    >
-                      <Scissors size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => pasteSelection(false)}
-                      disabled={!clipboard}
-                      aria-label="Paste notes (Ctrl+V)"
-                      className="seg-item seg-icon max-md:flex-1"
-                      title="Paste (Ctrl+V)"
-                    >
-                      <ClipboardPaste size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={deleteSelectedNotes}
-                      disabled={selectedKeys.size === 0}
-                      aria-label="Delete selected notes (Delete)"
-                      className="seg-item seg-icon max-md:flex-1"
-                      title="Delete selected (Del)"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
+                  {renderRollTools(
+                    "land-bar-tool max-md:my-0.5 max-md:flex-[3] max-md:hidden",
+                    "land-bar-tool max-md:my-0.5 max-md:flex-[4] max-md:hidden"
+                  )}
                 </>
               )}
             </div>
 
             {/* Phones: forces the row break after view switch + MIDI, whatever the width */}
             <div aria-hidden="true" className="hidden max-md:order-[-9998] max-md:block max-md:h-0 max-md:basis-full" />
-            {/* Sequencer on phones: Export and Import always pair up on their own row */}
-            {viewMode === "roll" && <div aria-hidden="true" className="hidden max-md:block max-md:h-0 max-md:basis-full" />}
+            {/* Landscape phones, sequencer: the tools share the bar, so Export and Import pair up on their own row below them */}
+            {viewMode === "roll" && <div aria-hidden="true" className="land-bar-break hidden" />}
             <div className="flex items-center gap-2 max-md:contents">
               <button
                 type="button"
@@ -2502,7 +2610,7 @@ export default function NeonSynthPad() {
       </header>
 
       {/* MAIN INSTRUMENT WORKSPACE */}
-      <main className={`land-main flex-1 w-full max-w-[1720px] mx-auto flex flex-col ${viewMode === "pad" ? "min-h-[168px] max-md:max-h-[440px]" : "min-h-[400px]"} max-md:order-2 md:min-h-0`}>
+      <main className={`land-main flex-1 w-full max-w-[1720px] mx-auto flex flex-col ${viewMode === "pad" ? "min-h-[168px] max-md:max-h-[440px]" : "min-h-[400px] max-md:min-h-[520px]"} max-md:order-2 md:min-h-0`}>
         {viewMode === "pad" ? (() => {
           const renderedPads = Array.from({ length: numNotes })
             .map((_, i) => i)
@@ -2744,28 +2852,16 @@ export default function NeonSynthPad() {
                 ref={scrollRef}
                 onScroll={updateViewport}
                 onMouseLeave={() => setHoveredCell(null)}
+                onTouchStart={handleRollTouchStart}
+                onTouchMove={handleRollTouchMove}
+                onTouchEnd={handleRollTouchEnd}
+                onTouchCancel={cancelTouchDrag}
                 onMouseMove={e => {
-                  if (!scrollRef.current) return;
-                  const rect = scrollRef.current.getBoundingClientRect();
-                  const x = e.clientX - rect.left + scrollRef.current.scrollLeft - 52;
-                  const y = e.clientY - rect.top;
+                  const loc = locateCell(e.clientX, e.clientY);
+                  if (!loc) return;
+                  const { step, renderedIdx, note } = loc;
 
-                  const scrollY = scrollRef.current.scrollTop;
-                  const totalContentHeight = renderedNoteIndices.length * rowHeight;
-                  const pianoRollTop = 32;
-
-                  const step = Math.floor(x / effectiveStepWidth);
-                  const renderedIdx = Math.floor(
-                    (totalContentHeight - (y + scrollY - pianoRollTop)) / rowHeight
-                  );
-                  const note = renderedNoteIndices[renderedIdx];
-
-                  if (
-                    step >= 0 &&
-                    step < numSteps &&
-                    renderedIdx >= 0 &&
-                    renderedIdx < renderedNoteIndices.length
-                  ) {
+                  if (loc.inside) {
                     liveHoverRef.current = { step, note };
                   }
 
@@ -2990,7 +3086,10 @@ export default function NeonSynthPad() {
                                 onMouseLeave={() => {
                                   setHoveredCell(null);
                                 }}
-                                style={{ width: `${effectiveStepWidth}px` }}
+                                style={{
+                                  width: `${effectiveStepWidth}px`,
+                                  touchAction: editTool === "select" && isSet && isSelected ? "none" : undefined,
+                                }}
                                 className={`flex-shrink-0 border-r ${
                                   isBarStart
                                     ? "border-r-[#dad2be]/[0.22]"
@@ -3208,7 +3307,12 @@ export default function NeonSynthPad() {
               </div>
 
               {/* Sequencer footer: pattern length, zoom, tempo, follow. Chord level sits at the far end. */}
-              <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-[#131613] border-t border-[#dad2be]/[0.12] z-40 shrink-0">
+              <div className="flex flex-wrap items-center gap-2 px-3 py-2 bg-[#131613] border-t border-[#dad2be]/[0.12] z-40 shrink-0 max-md:grid max-md:grid-cols-12">
+                {/* Phones: tools and Play sit right under the roll */}
+                {renderRollTools(
+                  "roll-foot md:hidden max-md:col-span-5 max-[350px]:col-span-12",
+                  "roll-foot md:hidden max-md:col-span-7 max-[350px]:col-span-12"
+                )}
                 <Stepper
                   label="Steps"
                   display={numSteps}
@@ -3225,12 +3329,17 @@ export default function NeonSynthPad() {
                     if (e.deltaY < 0) setNumSteps(prev => Math.min(1024, prev + 4));
                     else setNumSteps(prev => Math.max(4, prev - 4));
                   }}
-                  className="cursor-ns-resize max-md:order-1 max-md:w-full"
+                  className="cursor-ns-resize max-md:col-span-6 max-md:min-w-0 max-[350px]:col-span-12"
                 />
 
                 <Stepper
                   label="Zoom"
-                  display={`${effectiveStepWidth}px`}
+                  display={
+                    <>
+                      {effectiveStepWidth}
+                      <span className="max-md:hidden">px</span>
+                    </>
+                  }
                   value={effectiveStepWidth}
                   min={16}
                   max={160}
@@ -3239,8 +3348,19 @@ export default function NeonSynthPad() {
                   incLabel="Zoom in sequencer step width"
                   onDec={() => setStepWidth(prev => Math.max(16, prev - 8))}
                   onInc={() => setStepWidth(prev => Math.min(160, prev + 8))}
-                  className="max-md:order-3 max-md:min-w-0 max-md:flex-1"
+                  className="max-md:col-span-6 max-md:min-w-0 max-[350px]:col-span-12"
                 />
+
+                <button
+                  type="button"
+                  onClick={() => setIsPlaying(!isPlaying)}
+                  aria-pressed={isPlaying}
+                  aria-label={isPlaying ? "Stop sequence playback" : "Start sequence playback"}
+                  title="Play or stop (Space)"
+                  className="btn btn-icon roll-foot justify-self-start md:hidden max-md:col-span-2"
+                >
+                  {isPlaying ? <Square size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
+                </button>
 
                 <div
                   onMouseDown={startNumericDrag(bpm, setBpm, 40, 240, 3)}
@@ -3248,9 +3368,9 @@ export default function NeonSynthPad() {
                     if (e.deltaY < 0) setBpm(prev => Math.min(240, prev + 1));
                     else setBpm(prev => Math.max(40, prev - 1));
                   }}
-                  className="stepper cursor-ns-resize max-md:order-2 max-md:w-full"
+                  className="stepper roll-tempo cursor-ns-resize max-md:col-span-7 max-md:min-w-0"
                 >
-                  <span className="stepper-label">Tempo</span>
+                  <span className="stepper-label max-md:hidden">Tempo</span>
                   <div className="stepper-value min-w-[72px] gap-1">
                     {bpm}
                     <span className="font-normal text-t3">BPM</span>
@@ -3276,7 +3396,7 @@ export default function NeonSynthPad() {
                   onClick={() => setAutoScroll(prev => !prev)}
                   aria-pressed={autoScroll}
                   aria-label="Follow playhead"
-                  className="btn max-md:order-4 max-md:shrink-0"
+                  className="btn max-md:col-span-3 max-md:min-w-0 max-md:px-0"
                   title="Scroll the view to follow the playhead during playback"
                 >
                   Follow
@@ -3313,7 +3433,7 @@ export default function NeonSynthPad() {
                     incLabel="Increase chord volume"
                     onDec={() => setChordVolumeDb(prev => Math.max(-6, prev - 1))}
                     onInc={() => setChordVolumeDb(prev => Math.min(-1, prev + 1))}
-                    className="ml-auto min-[1280px]:ml-0"
+                    className="ml-auto max-md:col-span-12 max-md:min-w-0 min-[1280px]:ml-0"
                   />
                 )}
               </div>

@@ -357,6 +357,7 @@ body,
     align-items: center;
     justify-content: center;
     gap: 7px;
+    padding-bottom: 1.5px; /* the waveform glyph carries more empty space above its line than below it */
     border-radius: 3.5px;
     color: var(--t3);
     font-family: var(--font-mono);
@@ -420,19 +421,21 @@ body,
     pointer-events: none;
     transition: background-color 120ms var(--ease-out);
   }
-  .pad:hover::after {
-    background: rgba(242, 239, 230, 0.035);
-  }
-  .pad[data-edit="true"]:hover::after {
-    background: rgba(242, 239, 230, 0.075);
+  @media (hover: hover) and (pointer: fine) {
+    .pad:hover::after {
+      background: rgba(242, 239, 230, 0.035);
+    }
+    .pad[data-edit="true"]:hover::after {
+      background: rgba(242, 239, 230, 0.075);
+    }
+    .pad:hover .keycap {
+      color: var(--t1);
+      border-color: var(--line-bright);
+    }
   }
   .pad[aria-disabled="true"] {
     border-style: dashed;
     opacity: 0.42;
-  }
-  .pad:hover .keycap {
-    color: var(--t1);
-    border-color: var(--line-bright);
   }
   .pad:focus-visible {
     outline-offset: -3px;
@@ -677,6 +680,54 @@ body,
   .land-root .keybed {
     min-width: calc(var(--n) * var(--pad-w, 44px) + (var(--n) - 1) * 6px);
   }
+  /* Sequencer: the bar is beside the roll here, so the roll footer drops its phone duplicates */
+  .land-root .roll-foot {
+    display: none;
+  }
+  .land-root .land-bar-tool {
+    display: inline-flex;
+  }
+}
+
+/* Landscape phones narrower than the md breakpoint keep the roll tools in the bar: Export and Import wrap below them */
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 767px) {
+  .land-root .land-bar-break {
+    display: block;
+    flex-basis: 100%;
+    height: 0;
+  }
+  /* The footer loses its tools and Play here, so Tempo takes the freed columns */
+  .land-root .roll-tempo {
+    grid-column: span 9;
+  }
+}
+
+/* The smallest landscape screens have no room for a word beside the number in the footer steppers */
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 599px) {
+  .land-root .stepper-inline-label {
+    display: none;
+  }
+  .land-root .stepper-value[role="spinbutton"] {
+    min-width: 0;
+  }
+}
+
+/*
+  Labels next to an icon: trim the line box to cap height and baseline, so the letters (not the font's
+  empty descender space) are what centres against the icon. Older browsers get a small nudge instead.
+*/
+.trim-caps {
+  line-height: 1;
+}
+@supports (text-box: trim-both cap alphabetic) {
+  .trim-caps {
+    text-box: trim-both cap alphabetic;
+  }
+}
+@supports not (text-box: trim-both cap alphabetic) {
+  .trim-caps {
+    padding-top: 0.08em;
+  }
 }
 
 /* Custom scrollbars for the sequencer roll */
@@ -694,6 +745,17 @@ body,
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #383f37;
+}
+/* Where both scrollbars meet, match the track instead of the browser's white square */
+::-webkit-scrollbar-corner {
+  background: var(--s2);
+}
+/* Thinner on touch screens: the roll needs the room, and fingers scroll by dragging the content */
+@media (pointer: coarse) {
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
 }
 
 .no-scrollbar::-webkit-scrollbar {

@@ -696,10 +696,6 @@ body,
     flex-basis: 100%;
     height: 0;
   }
-  /* The footer loses its tools and Play here, so Tempo takes the freed columns */
-  .land-root .roll-tempo {
-    grid-column: span 9;
-  }
 }
 
 /* The smallest landscape screens have no room for a word beside the number in the footer steppers */

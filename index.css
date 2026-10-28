@@ -809,11 +809,19 @@ input[type="range"].hw-slider::-moz-range-thumb {
   }
 }
 
+/*
+  Reduced motion: switch transitions off outright. Shortening them to 0.01ms is not the same thing: the default
+  transition-property is "all", so every style change on an element that already exists (the scope height,
+  the main area's min/max height, the legend spacing) turns into a transition that only resolves on the next
+  frame, while freshly created elements appear in their final state at once. A Pads <-> Sequencer switch then
+  paints one frame with the new content inside the old layout.
+*/
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    transition-duration: 0.01ms !important;
+    transition: none !important;
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }

@@ -10,6 +10,10 @@
 //   "layout-shift" = the browser's own layout-shift report (Chrome only).
 // Each DOM batch also prints what changed in it (first three kinds).
 //
+// &boxes adds coloured outlines (scope yellow, main area blue, roll scroller green, roll footer red) and the log
+// then also prints scroll=<scroller height> foot=<footer height> rows=<footer row heights>. Use it together
+// with the screenshot of the bad frame: the outlines show which box is the wrong size.
+//
 // Bisecting: add &fix=<letters> to the URL and tap the toggle a few times. If the flash is gone, that
 // suspect matters. Try one letter at a time, then the combination:
 //   fix=a    hide the scope canvas completely (is the canvas involved?)
@@ -28,6 +32,17 @@ if (params.has("probe")) {
       ".land-legend{margin-top:.75rem!important;padding-top:.75rem!important}}",
     e: ".land-root{overflow-y:hidden!important}",
   };
+  // &boxes outlines the boxes whose heights the log reports (outlines never affect layout):
+  // scope = yellow, main area = blue, roll scroller = green, roll footer = red.
+  if (params.has("boxes")) {
+    const st = document.createElement("style");
+    st.textContent =
+      ".land-scope{outline:2px solid #fc0!important;outline-offset:-2px}" +
+      ".land-main{outline:2px solid #39f!important;outline-offset:-2px}" +
+      ".land-main .overflow-auto{outline:2px solid #3f3!important;outline-offset:-2px}" +
+      ".land-main div.shrink-0.border-t{outline:2px solid #f33!important;outline-offset:-2px}";
+    document.head.appendChild(st);
+  }
   if (fixes.size) {
     const st = document.createElement("style");
     st.textContent = Array.from(fixes).map(k => CSS[k] || "").join("\n");
@@ -82,7 +97,13 @@ if (params.has("probe")) {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const bmpH = canvas ? Math.round(canvas.height / dpr) : 0;
     const stale = !!canvas && canvas.style.display !== "none" && fixes.has("a") === false && Math.abs(bmpH - cssH) > 1.5;
-    const geo = `scope=${cssH} bmp=${bmpH} main=${mainEl ? Math.round(mainEl.getBoundingClientRect().height) : "?"} top=${root ? Math.round(root.scrollTop) : "?"}`;
+    const hh = (e: Element | null) => (e ? Math.round(e.getBoundingClientRect().height) : "-");
+    const scroller = q(".land-main .overflow-auto");
+    const foot = q(".land-main div.shrink-0.border-t");
+    const rows = foot ? getComputedStyle(foot).gridTemplateRows.replace(/\.\d+/g, "").replace(/px/g, "") : "-";
+    const geo =
+      `scope=${cssH} bmp=${bmpH} main=${hh(mainEl)} top=${root ? Math.round(root.scrollTop) : "?"} ` +
+      `scroll=${hh(scroller)} foot=${hh(foot)} rows=${rows}`;
     return {
       text: `${toggle}/${scope}/${main}/${bar} ${geo}`,
       flags: (views.size > 1 ? "  <<< MIXED" : "") + (stale ? "  <<< STALE-CANVAS" : ""),

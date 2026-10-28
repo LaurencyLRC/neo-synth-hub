@@ -2413,13 +2413,13 @@ export default function NeonSynthPad() {
               id="audio-init-title"
               className="text-[22px] font-semibold leading-tight tracking-[-0.015em] text-t1"
             >
-              Polyphonic Consonance Analyzer
+              Consonance Analyzer
             </h1>
             <p className="mt-2.5 max-w-[54ch] text-sm leading-relaxed text-t2">
               Hold two voices to plot their just-intonation Lissajous ratio, <br />
               three or more to trace a bass-demodulated phasor orbit. <br />
               Play with your pointer, keyboard, MIDI controller, <br />
-              or using the step sequencer.
+              or the step sequencer.
             </p>
 
             <button

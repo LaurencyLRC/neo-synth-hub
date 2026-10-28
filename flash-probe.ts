@@ -1,18 +1,39 @@
-// flash-probe.ts: TEMPORARY diagnostic for the Pads <-> Sequencer flash. Delete it when done.
+// flash-probe.ts (v2): TEMPORARY diagnostic for the Pads <-> Sequencer flash. Delete it when done.
 //
-// Use: add `import "./flash-probe";` to main.tsx, deploy, then open the site with ?probe in the URL
-// (e.g. https://your.site/?probe). A green log appears at the bottom of the screen. Tap Sequencer / Pads,
-// then screenshot the log.
+// Use: keep `import "./flash-probe";` in main.tsx, deploy, then open the site with ?probe in the URL.
+// A green log appears at the bottom of the screen. Tap Sequencer / Pads and watch (or screenshot) it.
 //
-// What it records: before every browser frame it reads which view the toggle, the scope, the main area and
-// the control bar are in. It only prints a line when that combination changes, and marks a frame MIXED
-// when they disagree. It also prints one "DOM batch" line per group of DOM changes React makes.
-//   - A MIXED line means the page itself held a half-switched state for a frame (an app/React problem).
-//   - No MIXED line but a mixed picture on screen means the browser painted it (a paint problem).
+// The log is per frame, and a line only prints when something changed:
+//   scope=<css height>  bmp=<canvas bitmap height in css px>  main=<land-main height>  top=<scroll offset>
+//   "STALE-CANVAS" = the scope's bitmap is a different size from its box (it would be drawn stretched).
+//   "MIXED"        = toggle, scope, keybed/roll and bar do not agree on the view.
+//   "layout-shift" = the browser's own layout-shift report (Chrome only).
+// Each DOM batch also prints what changed in it (first three kinds).
+//
+// Bisecting: add &fix=<letters> to the URL and tap the toggle a few times. If the flash is gone, that
+// suspect matters. Try one letter at a time, then the combination:
+//   fix=a    hide the scope canvas completely (is the canvas involved?)
+//   fix=b    give the scope the same height in both views, so nothing on the page changes size or moves
+//            on a switch except the keybed/roll content itself (does the layout shift matter?)
+//   fix=b,e  like b, and the page itself cannot scroll (root overflow hidden)
 
 const params = new URLSearchParams(window.location.search);
 
 if (params.has("probe")) {
+  const fixes = new Set((params.get("fix") || "").split(",").map(s => s.trim()).filter(Boolean));
+  const CSS: Record<string, string> = {
+    a: ".land-scope canvas{display:none!important}",
+    b:
+      "@media (max-width:767px){.land-scope{height:clamp(104px,calc(var(--app-h,100dvh)*0.14),220px)!important}" +
+      ".land-legend{margin-top:.75rem!important;padding-top:.75rem!important}}",
+    e: ".land-root{overflow-y:hidden!important}",
+  };
+  if (fixes.size) {
+    const st = document.createElement("style");
+    st.textContent = Array.from(fixes).map(k => CSS[k] || "").join("\n");
+    document.head.appendChild(st);
+  }
+
   const lines: string[] = [];
   const box = document.createElement("pre");
   Object.assign(box.style, {
@@ -53,7 +74,19 @@ if (params.has("probe")) {
     const bar = !q(".land-ctl-bar") ? "?" : q('[aria-label="Hide muted pads"]') ? "pad" : "roll";
     const views = new Set([toggle, scope, main, bar]);
     views.delete("?");
-    return { text: `toggle=${toggle} scope=${scope} main=${main} bar=${bar}`, mixed: views.size > 1 };
+
+    const canvas = q(".land-scope canvas") as HTMLCanvasElement | null;
+    const mainEl = q(".land-main");
+    const root = q(".land-root");
+    const cssH = canvas ? Math.round(canvas.getBoundingClientRect().height) : 0;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const bmpH = canvas ? Math.round(canvas.height / dpr) : 0;
+    const stale = !!canvas && canvas.style.display !== "none" && fixes.has("a") === false && Math.abs(bmpH - cssH) > 1.5;
+    const geo = `scope=${cssH} bmp=${bmpH} main=${mainEl ? Math.round(mainEl.getBoundingClientRect().height) : "?"} top=${root ? Math.round(root.scrollTop) : "?"}`;
+    return {
+      text: `${toggle}/${scope}/${main}/${bar} ${geo}`,
+      flags: (views.size > 1 ? "  <<< MIXED" : "") + (stale ? "  <<< STALE-CANVAS" : ""),
+    };
   };
 
   let last = "";
@@ -61,24 +94,50 @@ if (params.has("probe")) {
     const s = snap();
     if (s.text !== last) {
       last = s.text;
-      log(`${T()}s frame  ${s.text}${s.mixed ? "   <<< MIXED" : ""}`);
+      log(`${T()} frame ${s.text}${s.flags}`);
     }
     requestAnimationFrame(frame);
   };
 
+  const describe = (n: Node | null) => {
+    if (!n) return "?";
+    if (n.nodeType === 3) return "#text";
+    const el = n as Element;
+    const c = (el.getAttribute && el.getAttribute("class")) || "";
+    return el.tagName.toLowerCase() + (c ? "." + c.split(/\s+/)[0] : "");
+  };
+
   const start = () => {
     document.body.appendChild(box);
-    log(`probe on. ${navigator.userAgent.slice(0, 70)}`);
-    log(`viewport ${window.innerWidth}x${window.innerHeight} dpr ${window.devicePixelRatio}`);
+    log(`probe v2 fix=${Array.from(fixes).join(",") || "none"}`);
+    log(`${window.innerWidth}x${window.innerHeight} dpr ${window.devicePixelRatio.toFixed(2)}`);
     const root = document.getElementById("root");
     if (root) {
-      new MutationObserver(recs => log(`${T()}s DOM batch  records=${recs.length}`)).observe(root, {
-        subtree: true,
-        childList: true,
-        attributes: true,
-      });
+      new MutationObserver(recs => {
+        const kinds: Record<string, number> = {};
+        recs.forEach(r => {
+          const k = `${r.type === "attributes" ? r.attributeName : r.type}@${describe(r.target)}`;
+          kinds[k] = (kinds[k] || 0) + 1;
+        });
+        const top = Object.entries(kinds)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([k, v]) => `${v}x${k}`)
+          .join(" ");
+        log(`${T()} DOM ${recs.length}: ${top}`);
+      }).observe(root, { subtree: true, childList: true, attributes: true });
     }
-    window.addEventListener("click", () => log(`${T()}s click`), true);
+    try {
+      new PerformanceObserver(list => {
+        list.getEntries().forEach(e => {
+          const ls = e as unknown as { value: number; sources?: unknown[] };
+          if (ls.value > 0) log(`${T()} layout-shift ${ls.value.toFixed(3)} (${ls.sources?.length ?? 0} nodes)`);
+        });
+      }).observe({ type: "layout-shift", buffered: false });
+    } catch {
+      /* not supported in this browser */
+    }
+    window.addEventListener("click", () => log(`${T()} click`), true);
     requestAnimationFrame(frame);
   };
 

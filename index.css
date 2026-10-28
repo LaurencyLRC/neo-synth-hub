@@ -337,10 +337,9 @@ body,
     font-weight: 500;
     letter-spacing: 0.03em;
     cursor: pointer;
-    transition:
-      background-color 140ms var(--ease-out),
-      color 140ms var(--ease-out),
-      box-shadow 140ms var(--ease-out);
+    /* A selector that gets tapped in quick succession: no double-tap-zoom handling, and no fade on touch
+       (the fade below is for pointer devices), so the selected state is on screen the frame it is tapped. */
+    touch-action: manipulation;
   }
   .wave[aria-checked="true"] {
     background: var(--s4);
@@ -410,6 +409,12 @@ body,
     .transport:hover {
       background: var(--s4);
       border-color: var(--line-bright);
+    }
+    .wave {
+      transition:
+        background-color 140ms var(--ease-out),
+        color 140ms var(--ease-out),
+        box-shadow 140ms var(--ease-out);
     }
     .wave:hover {
       color: var(--t1);

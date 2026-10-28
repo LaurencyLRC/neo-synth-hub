@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "react";
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo, useSyncExternalStore } from "react";
 import {
   Settings2,
   Eye,
@@ -392,6 +392,61 @@ const WaveGlyph: React.FC<{ type: OscillatorType }> = ({ type }) => (
     />
   </svg>
 );
+
+// The waveform lives outside React state on purpose. Only the four wave buttons draw it, and the audio
+// path reads it when a note starts, so a tap repaints those four buttons instead of re-rendering the
+// whole instrument (pads, roll, scope readout) the way a useState in NeonSynthPad would.
+type WaveStore = {
+  get: () => OscillatorType;
+  set: (t: OscillatorType) => void;
+  subscribe: (fn: () => void) => () => void;
+};
+
+const createWaveStore = (initial: OscillatorType): WaveStore => {
+  let value = initial;
+  const subs = new Set<() => void>();
+  return {
+    get: () => value,
+    set: t => {
+      if (t === value) return;
+      value = t;
+      subs.forEach(fn => fn());
+    },
+    subscribe: fn => {
+      subs.add(fn);
+      return () => {
+        subs.delete(fn);
+      };
+    },
+  };
+};
+
+const WaveSelector = React.memo(function WaveSelector({ store }: { store: WaveStore }) {
+  const waveType = useSyncExternalStore(store.subscribe, store.get);
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Waveform"
+      className="land-waves well grid grid-cols-4 gap-1 p-1 max-md:h-[60px] md:w-[136px] md:shrink-0 md:grid-cols-2"
+    >
+      {WAVES.map(t => (
+        <button
+          key={t}
+          type="button"
+          role="radio"
+          aria-checked={waveType === t}
+          aria-label={WAVE_FULL[t]}
+          title={WAVE_FULL[t]}
+          onClick={() => store.set(t)}
+          className="wave max-md:gap-1"
+        >
+          <WaveGlyph type={t} />
+          <span className="trim-caps">{WAVE_SHORT[t]}</span>
+        </button>
+      ))}
+    </div>
+  );
+});
 
 // The consonance vocabulary, drawn once: diamond = perfect, circle = consonant,
 // triangle = slightly consonant, cross = dissonant. Used in the legend, the readout and on pads,
@@ -1020,7 +1075,7 @@ export const HarmonicVisualizer: React.FC<{
 };
 
 export default function NeonSynthPad() {
-  const [waveType, setWaveType] = useState<OscillatorType>("sawtooth");
+  const [waveStore] = useState(() => createWaveStore("sawtooth"));
   const [numNotes, setNumNotes] = useState(24);
   const [numSteps, setNumSteps] = useState(16);
   const [stepWidth, setStepWidth] = useState(48);
@@ -1188,7 +1243,7 @@ export default function NeonSynthPad() {
       chordNotes: Array.from(chordNotes).filter(inRange),
       disabledNotes: Array.from(disabledNotes),
       keyBindings,
-      waveType,
+      waveType: waveStore.get(),
       chordVolumeDb,
       numSteps,
       numNotes,
@@ -1240,7 +1295,7 @@ export default function NeonSynthPad() {
         setNumNotes(notes);
         setBpm(clampInt(d.bpm, 40, 240, 120));
         setOctave(clampInt(d.octave, 1, 8, 4));
-        if (WAVES.includes(d.waveType)) setWaveType(d.waveType);
+        if (WAVES.includes(d.waveType)) waveStore.set(d.waveType);
         if (typeof d.chordVolumeDb === "number")
           setChordVolumeDb(clampInt(d.chordVolumeDb, -6, -1, -5));
         if (
@@ -1537,7 +1592,7 @@ export default function NeonSynthPad() {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
-      osc.type = waveType;
+      osc.type = waveStore.get();
       osc.frequency.setValueAtTime(getFreq(index), startTime);
 
       gain.gain.setValueAtTime(0, startTime);
@@ -1556,7 +1611,7 @@ export default function NeonSynthPad() {
         setPivotNote(index);
       });
     },
-    [disabledNotes, editMode, octave, getFreq, waveType, uiAt, initAudio]
+    [disabledNotes, editMode, octave, getFreq, waveStore, uiAt, initAudio]
   );
 
   const stopNote = useCallback(
@@ -2089,7 +2144,17 @@ export default function NeonSynthPad() {
     };
   };
 
-  const interval = getIntervalInfo();
+  // Memoised on what it is built from. A fresh object on every render made the scope rebuild its orbit
+  // table and restart its draw loop each time anything at all re-rendered (a tap, a step tick, a note).
+  const interval = useMemo(getIntervalInfo, [
+    activeNotes,
+    isPlaying,
+    currentStep,
+    stepMetadata,
+    octave,
+    lastSoundedGroup,
+    lastNotes,
+  ]);
 
   const startNumericDrag = useCallback(
     (
@@ -2528,27 +2593,7 @@ export default function NeonSynthPad() {
               />
             </div>
 
-            <div
-              role="radiogroup"
-              aria-label="Waveform"
-              className="land-waves well grid grid-cols-4 gap-1 p-1 max-md:h-[60px] md:w-[136px] md:shrink-0 md:grid-cols-2"
-            >
-              {WAVES.map(t => (
-                <button
-                  key={t}
-                  type="button"
-                  role="radio"
-                  aria-checked={waveType === t}
-                  aria-label={WAVE_FULL[t]}
-                  title={WAVE_FULL[t]}
-                  onClick={() => setWaveType(t)}
-                  className="wave max-md:gap-1"
-                >
-                  <WaveGlyph type={t} />
-                  <span className="trim-caps">{WAVE_SHORT[t]}</span>
-                </button>
-              ))}
-            </div>
+            <WaveSelector store={waveStore} />
           </div>
 
           <div className="land-ctl-bar mt-3 -mx-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t rule px-3 pt-3 box-content max-md:mt-2 max-md:gap-x-2 max-md:gap-y-1 max-md:pt-2">

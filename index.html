@@ -3,7 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23f2efe6'><path d='M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'/></svg>" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta id="viewport-meta" name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // Touch devices lay the page out on a canvas 1 / MOBILE_SCALE times wider than the screen and the browser
+      // scales it down to fit, which is what a browser page zoom of MOBILE_SCALE (65%) did before. Change the
+      // number to resize the whole interface: 0.8 for larger, 0.5 for smaller. Desktop browsers ignore it.
+      (function () {
+        var MOBILE_SCALE = 0.65;
+        var meta = document.getElementById("viewport-meta");
+        var touch = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+        if (!meta || !touch) return;
+        function apply() {
+          var w = Math.round(window.screen.width / MOBILE_SCALE);
+          meta.setAttribute("content", "width=" + w);
+        }
+        apply();
+        window.addEventListener("orientationchange", function () {
+          setTimeout(apply, 100);
+        });
+      })();
+    </script>
     <title>Polyphonic Consonance Analyzer</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

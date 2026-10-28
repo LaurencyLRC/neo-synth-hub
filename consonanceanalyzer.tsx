@@ -2726,7 +2726,10 @@ export default function NeonSynthPad() {
             if (last && last.octave === o) last.count += 1;
             else octaveGroups.push({ octave: o, start: col, count: 1 });
           });
-          const dense = renderedPads.length > 36;
+          // Dense styling exists for wide screens, where every extra key squeezes all pads narrower.
+          // On phones the keybed keeps a fixed pad width and scrolls sideways, so the count must not
+          // change label size or key height there.
+          const dense = renderedPads.length > 36 && !isPhoneWidth;
           // Naturals start a little lower, so the raised accidentals carry the
           // piano's 2 + 3 rhythm by shape alone, without a second surface colour.
           const accidentalDrop = dense ? 14 : 24;

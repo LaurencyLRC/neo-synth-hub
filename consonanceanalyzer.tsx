@@ -2416,9 +2416,10 @@ export default function NeonSynthPad() {
               Polyphonic Consonance Analyzer
             </h1>
             <p className="mt-2.5 max-w-[54ch] text-sm leading-relaxed text-t2">
-              Hold two voices to plot their just-intonation Lissajous ratio, or three or more to
-              trace a bass-demodulated phasor orbit. <br />
-              Play using your pointer, keyboard, MIDI controller, or the step sequencer.
+              Hold two voices to plot their just-intonation Lissajous ratio, <br />
+              three or more to trace a bass-demodulated phasor orbit. <br />
+              Play with your pointer, keyboard, MIDI controller, <br />
+              or using the step sequencer.
             </p>
 
             <button

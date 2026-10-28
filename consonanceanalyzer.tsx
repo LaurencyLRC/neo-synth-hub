@@ -2417,8 +2417,8 @@ export default function NeonSynthPad() {
             </h1>
             <p className="mt-2.5 max-w-[54ch] text-sm leading-relaxed text-t2">
               Hold two voices to plot their just-intonation Lissajous ratio, or three or more to
-              trace a bass-demodulated phasor orbit. Trigger notes from QWERTY, pointer, external
-              MIDI, or the harmonic step sequencer.
+              trace a bass-demodulated phasor orbit. <br>
+              Play using your keyboard, mouse, MIDI controller, or the step sequencer.
             </p>
 
             <button

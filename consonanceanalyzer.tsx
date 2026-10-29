@@ -558,8 +558,8 @@ export const HarmonicVisualizer: React.FC<{
 
     const osdFont = (mono: boolean) =>
       mono
-        ? "500 10.5px 'Azeret Mono', 'IBM Plex Mono', ui-monospace, monospace"
-        : "500 11px 'Chivo', 'IBM Plex Sans', system-ui, sans-serif";
+        ? "500 10.5px 'B612 Mono', ui-monospace, monospace"
+        : "500 11px 'B612', system-ui, sans-serif";
     const osdWidth = (text: string, mono = false) => {
       ctx.save();
       ctx.font = osdFont(mono);

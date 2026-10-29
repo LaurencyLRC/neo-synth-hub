@@ -11,8 +11,8 @@
   harmonic meaning.
 */
 :root {
-  --font-ui: "Chivo", "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: "Azeret Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-ui: "B612", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "B612 Mono", ui-monospace, monospace;
 
   /* Warm anodized olive-graphite chassis tiers (OKLCH calibrated with hex fallbacks) */
   --bg: #0b0d0b;
